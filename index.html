@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Борд — котировки</title>
+
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0A0F1E">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Борд">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@200;300;400;500&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A0F1E;
+    --panel:#111A2F;
+    --panel-hi:#16213B;
+    --rule:#1E2B47;
+    --text:#E6EAF5;
+    --muted:#7C88A6;
+    --muted-dim:#54607C;
+    --accent:#7C6CFF;
+    --up:#35D07F;
+    --down:#FF5C7A;
+    --warn:#D9A64A;
+
+    /* ---- масштаб плиток: одно число меняет всё пропорционально ---- */
+    --s:1.3;
+
+    --tile-min-base:190px;
+    --tile-min:calc(var(--tile-min-base) * var(--s));
+    --spark-h:calc(45px * var(--s));
+    --name-size:calc(11px * var(--s));
+    --price-size:calc(15px * var(--s));
+    --rank-size:calc(9px * var(--s));
+    --venue-size:calc(8px * var(--s));
+    --unit-size:calc(8.5px * var(--s));
+    --chg-size:calc(10px * var(--s));
+    --msg-size:calc(9px * var(--s));
+    --price-h:calc(19px * var(--s));
+    --pad-y:calc(6px * var(--s));
+    --pad-x:calc(9px * var(--s));
+    --radius:calc(8px * var(--s));
+    --gap:calc(8px * var(--s));
+    --gap-top:calc(6px * var(--s));
+    --gap-price:calc(7px * var(--s));
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink);color:var(--text);
+    font-family:'Archivo',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+            calc(40px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    overscroll-behavior-y:contain;
+  }
+
+  /* ---------- Шапка ---------- */
+  header{
+    display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;
+    padding-bottom:11px;margin-bottom:12px;border-bottom:1px solid var(--rule);
+  }
+  .brand{margin-right:auto}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;font-size:9.5px;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--muted-dim);margin-bottom:3px;
+  }
+  h1{margin:0;font-size:22px;font-weight:400;letter-spacing:-.01em;line-height:1}
+  h1 .count{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:400;
+    color:var(--muted-dim);vertical-align:super;margin-left:6px;letter-spacing:0;
+  }
+  .status{
+    font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--muted-dim);
+    letter-spacing:.04em;align-self:center;
+  }
+
+  .btn,.range button{
+    appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:400;
+    letter-spacing:.06em;padding:6px 11px;border-radius:6px;cursor:pointer;
+    transition:color .15s,background .15s,border-color .15s;
+  }
+  .btn:hover{color:var(--text);border-color:#2A3A5E}
+  .btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn:focus-visible,.range button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .range{display:flex;gap:2px;background:var(--panel);padding:3px;border-radius:7px;border:1px solid var(--rule)}
+  .range button{border:0;background:transparent;padding:5px 10px;border-radius:5px}
+  .range button:hover{color:var(--text)}
+  .range button[aria-pressed="true"]{background:var(--accent);color:#fff}
+
+  /* ---------- Панель добавления ---------- */
+  .addbar{
+    display:flex;flex-wrap:wrap;align-items:center;gap:7px;
+    padding:9px 11px;margin-bottom:12px;
+    background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+  }
+  .addbar[hidden]{display:none}
+  .addbar input{
+    appearance:none;background:var(--ink);border:1px solid var(--rule);border-radius:5px;
+    color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;
+    padding:6px 9px;min-width:190px;
+  }
+  .addbar input:focus{outline:none;border-color:var(--accent)}
+  .addbar input::placeholder{color:var(--muted-dim)}
+  .add-msg{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted-dim);
+  }
+  .add-msg.err{color:var(--down)}
+  .add-msg.ok{color:var(--up)}
+  .add-hint{
+    font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:300;
+    color:var(--muted-dim);flex-basis:100%;
+  }
+
+  /* ---------- Сетка ---------- */
+  .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tile-min),1fr));gap:var(--gap)}
+
+  .tile{
+    position:relative;display:block;text-decoration:none;color:inherit;
+    background:var(--panel);border:1px solid var(--rule);border-radius:var(--radius);
+    padding:var(--pad-y) var(--pad-x) 0;overflow:hidden;
+    transition:background .15s,border-color .15s,opacity .15s;
+  }
+  .tile:hover{background:var(--panel-hi);border-color:#2A3A5E}
+  .tile:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  body.editing .tile{cursor:grab}
+  body.editing .tile.dragging{opacity:.35}
+  body.editing .tile.over{border-color:var(--accent)}
+
+  /* строка 1: рейтинг · название · биржа / кнопки правки */
+  .row-top{display:flex;align-items:center;gap:var(--gap-top);margin-bottom:1px;min-height:calc(14px * var(--s))}
+  .rank{
+    font-family:'IBM Plex Mono',monospace;font-size:var(--rank-size);font-weight:300;
+    color:var(--muted-dim);flex-shrink:0;
+  }
+  .name{
+    font-size:var(--name-size);font-weight:200;letter-spacing:.01em;color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .venue{
+    font-family:'IBM Plex Mono',monospace;font-size:var(--venue-size);font-weight:300;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted-dim);
+    margin-left:auto;flex-shrink:0;
+  }
+  .ctrl{display:none;margin-left:auto;gap:3px;flex-shrink:0}
+  body.editing .venue{display:none}
+  body.editing .ctrl{display:flex}
+  .ctrl button{
+    appearance:none;border:1px solid var(--rule);background:var(--ink);color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;font-size:calc(9px * var(--s));line-height:1;
+    width:calc(17px * var(--s));height:calc(17px * var(--s));
+    border-radius:4px;cursor:pointer;padding:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .ctrl button:hover{color:var(--text);border-color:#2A3A5E}
+  .ctrl button.del:hover{color:var(--down);border-color:var(--down)}
+  .ctrl button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+  /* строка 2: цена · изменение */
+  .row-price{display:flex;align-items:baseline;gap:var(--gap-price);min-height:var(--price-h)}
+  .price{
+    font-family:'IBM Plex Mono',monospace;font-size:var(--price-size);font-weight:400;
+    letter-spacing:-.01em;font-variant-numeric:tabular-nums;
+  }
+  .unit{font-size:var(--unit-size);font-weight:300;color:var(--muted-dim);letter-spacing:.06em}
+  .chg{
+    font-family:'IBM Plex Mono',monospace;font-size:var(--chg-size);font-weight:400;
+    margin-left:auto;font-variant-numeric:tabular-nums;
+  }
+  .up{color:var(--up)}
+  .down{color:var(--down)}
+  .flat{color:var(--muted-dim)}
+
+  /* строка 3: спарклайн во всю ширину плитки */
+  .spark{
+    display:block;width:calc(100% + var(--pad-x) * 2);height:var(--spark-h);
+    margin:calc(2px * var(--s)) 0 0 calc(var(--pad-x) * -1);
+  }
+  .spark svg{display:block;width:100%;height:100%}
+
+  .msg{
+    font-family:'IBM Plex Mono',monospace;font-size:var(--msg-size);color:var(--muted-dim);
+    height:var(--spark-h);display:flex;align-items:center;
+  }
+  .msg.warn{color:var(--warn)}
+
+  /* ---------- Подвал ---------- */
+  footer{
+    margin-top:16px;padding-top:11px;border-top:1px solid var(--rule);
+    display:flex;flex-wrap:wrap;gap:4px 20px;
+    font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:300;
+    color:var(--muted-dim);line-height:1.7;
+  }
+  footer code{color:var(--muted);background:var(--panel);padding:1px 5px;border-radius:3px}
+
+  @media (max-width:520px){
+    :root{--s:1.15;--tile-min-base:150px}
+    body{padding:calc(12px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+                 calc(30px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left))}
+    h1{font-size:19px}
+    .addbar input{min-width:0;flex:1 1 130px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="eyebrow">Котировки спот · обновление 30 с</div>
+    <h1>Борд<span class="count" id="count"></span></h1>
+  </div>
+  <div class="status" id="status">загрузка…</div>
+  <div class="range" role="group" aria-label="Период">
+    <button data-range="1D" aria-pressed="true">1Д</button>
+    <button data-range="1W" aria-pressed="false">1Н</button>
+    <button data-range="1M" aria-pressed="false">1М</button>
+    <button data-range="3M" aria-pressed="false">3М</button>
+    <button data-range="1Y" aria-pressed="false">1Г</button>
+  </div>
+  <button class="btn" id="btn-add">+ пара</button>
+  <button class="btn" id="btn-edit" aria-pressed="false">изменить</button>
+</header>
+
+<div class="addbar" id="addbar" hidden>
+  <input id="add-ticker" placeholder="XMR / XMRUSDT / MEXC:XMRUSDT" autocomplete="off" spellcheck="false">
+  <input id="add-name" placeholder="Название (необязательно)" autocomplete="off">
+  <button class="btn" id="add-go">добавить</button>
+  <button class="btn" id="add-close">закрыть</button>
+  <span class="add-msg" id="add-msg"></span>
+  <span class="add-hint">Без биржи — искать по очереди на Binance, MEXC и Bybit.</span>
+</div>
+
+<main class="board" id="board"></main>
+
+<footer>
+  <div>Список хранится в браузере. <a href="#" id="btn-export" style="color:var(--muted)">экспорт</a> · <a href="#" id="btn-import" style="color:var(--muted)">импорт</a> · <a href="#" id="btn-reset" style="color:var(--muted)">сброс</a></div>
+  <div>Изменение считается за выбранный период, не за сутки.</div>
+  <div>Размер плиток — переменная <code>--s</code> в начале <code>&lt;style&gt;</code>.</div>
+</footer>
+
+<script>
+/* ============================================================
+   СПИСОК ПО УМОЛЧАНИЮ
+   ============================================================ */
+const DEFAULTS = [
+  { rank:  1, name:'Bitcoin',      tickers:['BTCUSDT'] },
+  { rank:  2, name:'Ethereum',     tickers:['ETHUSDT'] },
+  { rank:  4, name:'BNB',          tickers:['BNBUSDT'] },
+  { rank:  5, name:'XRP',          tickers:['XRPUSDT'] },
+  { rank: 11, name:'Zcash',        tickers:['ZECUSDT'] },
+  { rank: 16, name:'Stellar',      tickers:['XLMUSDT'] },
+  { rank: 22, name:'Litecoin',     tickers:['LTCUSDT'] },
+  { rank: 23, name:'Gram',         tickers:['GRAMUSDT','TONUSDT'] },
+  { rank: 28, name:'Sui',          tickers:['SUIUSDT'] },
+  { rank: 29, name:'Tether Gold',  tickers:['XAUTUSDT'], venues:['mexc','bybit'] },
+  { rank: 35, name:'NEAR',         tickers:['NEARUSDT'] },
+  { rank: 44, name:'Mantle',       tickers:['MNTUSDT'],  venues:['bybit','mexc'] },
+  { rank: 75, name:'Flare',        tickers:['FLRUSDT'],  venues:['mexc','bybit'] },
+  { rank:547, name:'Silver · SLV', tickers:['SLVONUSDT','XAGUSDT'], venues:['mexc'] },
+  { rank:575, name:'Cyber',        tickers:['CYBERUSDT'] },
+  { rank:656, name:'Symbol',       tickers:['XYMUSDT'],  venues:['mexc','bybit'] },
+  { rank:667, name:'Civic',        tickers:['CVCUSDT'] },
+];
+
+const DEFAULT_VENUES = ['binance','mexc','bybit'];
+const VENUE_LABEL = { binance:'Binance', mexc:'MEXC', bybit:'Bybit' };
+const STORE_KEY = 'board.assets.v1';
+
+const RANGES = {
+  '1D': { spot:'15m', bybit:'15',  limit:96  },
+  '1W': { spot:'2h',  bybit:'120', limit:84  },
+  '1M': { spot:'4h',  bybit:'240', limit:180 },
+  '3M': { spot:'12h', bybit:'720', limit:180 },
+  '1Y': { spot:'1d',  bybit:'D',   limit:365 },
+};
+
+/* ============================================================
+   СОСТОЯНИЕ
+   ============================================================ */
+let assets = restore() || DEFAULTS.map(a => ({ ...a, tickers:[...a.tickers] }));
+let range = '1D';
+let editing = false;
+
+const board   = document.getElementById('board');
+const status  = document.getElementById('status');
+const counter = document.getElementById('count');
+
+function persist(){
+  try{
+    const plain = assets.map(a => ({ rank:a.rank, name:a.name, tickers:a.tickers, venues:a.venues }));
+    localStorage.setItem(STORE_KEY, JSON.stringify(plain));
+  }catch(e){ /* приватный режим или file:// без доступа к хранилищу */ }
+}
+function restore(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) return null;
+    return arr.filter(a => a && Array.isArray(a.tickers) && a.tickers.length)
+              .map(a => ({ rank:a.rank ?? null, name:a.name || a.tickers[0], tickers:a.tickers, venues:a.venues || null }));
+  }catch(e){ return null; }
+}
+
+/* последний удачный снимок — чтобы приложение открывалось с цифрами, а не с прочерками */
+const DATA_KEY = 'board.data.v1';
+const keyOf = a => a.tickers.join(',');
+
+function cacheData(){
+  try{
+    const items = {};
+    for (const a of assets) if (a._data && a._data !== 'none') items[keyOf(a)] = a._data;
+    localStorage.setItem(DATA_KEY, JSON.stringify({ range, ts: Date.now(), items }));
+  }catch(e){}
+}
+function uncacheData(){
+  try{
+    const raw = localStorage.getItem(DATA_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw);
+    if (!c || c.range !== range || !c.items) return null;
+    let hit = 0;
+    for (const a of assets){
+      const d = c.items[keyOf(a)];
+      if (d && Array.isArray(d.closes)){ a._data = d; a._hit = { venue:d.venue, ticker:d.ticker }; hit++; }
+    }
+    return hit ? c.ts : null;
+  }catch(e){ return null; }
+}
+
+/* ============================================================
+   ДАННЫЕ
+   ============================================================ */
+async function fetchCloses(venue, ticker, r){
+  if (venue === 'binance' || venue === 'mexc'){
+    const host = venue === 'binance' ? 'https://api.binance.com' : 'https://api.mexc.com';
+    const res = await fetch(`${host}/api/v3/klines?symbol=${ticker}&interval=${r.spot}&limit=${r.limit}`);
+    if (!res.ok) throw new Error('http ' + res.status);
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
+    return rows.map(k => parseFloat(k[4]));
+  }
+  if (venue === 'bybit'){
+    const res = await fetch(`https://api.bybit.com/v5/market/kline?category=spot&symbol=${ticker}&interval=${r.bybit}&limit=${Math.min(r.limit,1000)}`);
+    if (!res.ok) throw new Error('http ' + res.status);
+    const rows = (await res.json())?.result?.list;
+    if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
+    return rows.map(k => parseFloat(k[4])).reverse();
+  }
+  throw new Error('unknown venue');
+}
+
+async function resolve(asset, r){
+  const venues = asset.venues || DEFAULT_VENUES;
+  if (asset._hit){
+    try{ return { ...asset._hit, closes: await fetchCloses(asset._hit.venue, asset._hit.ticker, r) }; }
+    catch(e){ asset._hit = null; }
+  }
+  for (const ticker of asset.tickers){
+    for (const venue of venues){
+      try{
+        const closes = await fetchCloses(venue, ticker, r);
+        asset._hit = { venue, ticker };
+        return { venue, ticker, closes };
+      }catch(e){ /* следующая */ }
+    }
+  }
+  return null;
+}
+
+/* ============================================================
+   ФОРМАТИРОВАНИЕ И ГРАФИК
+   ============================================================ */
+function fmtPrice(p){
+  const d = p >= 100 ? 2 : p >= 1 ? 4 : p >= 0.01 ? 5 : p >= 0.0001 ? 6 : 8;
+  return p.toLocaleString('ru-RU', { minimumFractionDigits:d, maximumFractionDigits:d });
+}
+function fmtPct(x){
+  return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2).replace('.', ',') + '%';
+}
+
+function sparkline(closes, dir){
+  const W = 100, H = 30, PAD = 1.5;
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const span = (max - min) || 1;
+  const n = closes.length;
+  const x = i => (i / (n - 1)) * W;
+  const y = v => PAD + (1 - (v - min) / span) * (H - PAD * 2);
+  const path = 'M' + closes.map((v,i) => `${x(i).toFixed(2)} ${y(v).toFixed(2)}`).join(' L');
+  const area = path + ` L${W} ${H} L0 ${H} Z`;
+  const col = dir >= 0 ? 'var(--up)' : 'var(--down)';
+  const gid = 'g' + Math.random().toString(36).slice(2, 9);
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${col}" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="${col}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#${gid})" stroke="none"/>
+    <path d="${path}" fill="none" stroke="${col}" stroke-width="1"
+          vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+/* ============================================================
+   ОТРИСОВКА
+   ============================================================ */
+function tileBody(a){
+  const d = a._data;
+  if (!d) return `<div class="row-price"><span class="price flat">—</span></div>
+                  <div class="msg">поиск источника…</div>`;
+  if (d === 'none') return `<div class="row-price"><span class="price flat">—</span></div>
+                  <div class="msg warn">не найдено · проверьте тикер</div>`;
+
+  const last = d.closes[d.closes.length - 1];
+  const pct  = ((last - d.closes[0]) / d.closes[0]) * 100;
+  const cls  = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+  const quote = d.ticker.endsWith('USDT') ? 'USDT' : d.ticker.slice(-3);
+  return `<div class="row-price">
+            <span class="price">${fmtPrice(last)}</span><span class="unit">${quote}</span>
+            <span class="chg ${cls}">${fmtPct(pct)}</span>
+          </div>
+          <div class="spark">${sparkline(d.closes, Math.sign(pct))}</div>`;
+}
+
+function render(){
+  board.innerHTML = '';
+  counter.textContent = assets.length;
+
+  assets.forEach((a, i) => {
+    const d = a._data;
+    const tile = document.createElement('a');
+    tile.className = 'tile';
+    tile.dataset.i = i;
+    tile.draggable = editing;
+    if (d && d !== 'none' && !editing){
+      tile.href = `https://www.tradingview.com/chart/?symbol=${d.venue.toUpperCase()}:${d.ticker}`;
+      tile.target = '_blank';
+      tile.rel = 'noopener';
+    }
+
+    tile.innerHTML = `
+      <div class="row-top">
+        ${a.rank != null ? `<span class="rank">#${a.rank}</span>` : ''}
+        <span class="name">${escapeHtml(a.name)}</span>
+        <span class="venue">${d && d !== 'none' ? VENUE_LABEL[d.venue] : ''}</span>
+        <span class="ctrl">
+          <button type="button" data-act="left"  title="Левее">◀</button>
+          <button type="button" data-act="right" title="Правее">▶</button>
+          <button type="button" data-act="del" class="del" title="Удалить">×</button>
+        </span>
+      </div>
+      ${tileBody(a)}`;
+
+    board.append(tile);
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   ОБНОВЛЕНИЕ
+   ============================================================ */
+async function refresh(){
+  const r = RANGES[range];
+  status.textContent = 'обновление…';
+  const results = await Promise.all(assets.map(a => resolve(a, r).catch(() => null)));
+  results.forEach((d, i) => {
+    // при обрыве связи оставляем прошлые цифры, а не затираем прочерками
+    assets[i]._data = d || assets[i]._data || 'none';
+  });
+  render();
+
+  const ok = results.filter(Boolean).length;
+  const t = new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  status.textContent = ok ? `${ok}/${assets.length} · ${t}` : 'нет связи · данные прошлые';
+  if (ok) cacheData();
+}
+
+/* ============================================================
+   РЕДАКТИРОВАНИЕ: порядок и удаление
+   ============================================================ */
+function move(from, to){
+  if (to < 0 || to >= assets.length) return;
+  const [item] = assets.splice(from, 1);
+  assets.splice(to, 0, item);
+  persist();
+  render();
+}
+
+board.addEventListener('click', e => {
+  const btn = e.target.closest('.ctrl button');
+  if (btn){
+    e.preventDefault();
+    const i = +btn.closest('.tile').dataset.i;
+    const act = btn.dataset.act;
+    if (act === 'left')  move(i, i - 1);
+    if (act === 'right') move(i, i + 1);
+    if (act === 'del'){ assets.splice(i, 1); persist(); render(); }
+    return;
+  }
+  if (editing) e.preventDefault(); // в режиме правки плитка не открывает ссылку
+});
+
+/* перетаскивание */
+let dragFrom = null;
+
+board.addEventListener('dragstart', e => {
+  const tile = e.target.closest('.tile');
+  if (!editing || !tile) return;
+  dragFrom = +tile.dataset.i;
+  tile.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(dragFrom));
+});
+board.addEventListener('dragend', () => {
+  dragFrom = null;
+  for (const t of board.querySelectorAll('.tile')) t.classList.remove('dragging','over');
+});
+board.addEventListener('dragover', e => {
+  if (dragFrom === null) return;
+  e.preventDefault();
+  const tile = e.target.closest('.tile');
+  for (const t of board.querySelectorAll('.tile')) t.classList.remove('over');
+  if (tile && +tile.dataset.i !== dragFrom) tile.classList.add('over');
+});
+board.addEventListener('drop', e => {
+  if (dragFrom === null) return;
+  e.preventDefault();
+  const tile = e.target.closest('.tile');
+  if (!tile) return;
+  const to = +tile.dataset.i;
+  if (to !== dragFrom) move(dragFrom, to);
+  dragFrom = null;
+});
+
+/* ============================================================
+   РЕДАКТИРОВАНИЕ: добавление
+   ============================================================ */
+const addbar = document.getElementById('addbar');
+const addTicker = document.getElementById('add-ticker');
+const addName = document.getElementById('add-name');
+const addMsg = document.getElementById('add-msg');
+
+function parseInput(raw){
+  let s = raw.trim().toUpperCase().replace(/\s+/g, '');
+  if (!s) return null;
+  let venues = null;
+  const m = s.match(/^(BINANCE|MEXC|BYBIT)[:\/](.+)$/);
+  if (m){ venues = [m[1].toLowerCase()]; s = m[2]; }
+  const tickers = /(USDT|USDC|BTC|ETH|USD)$/.test(s) ? [s] : [s + 'USDT'];
+  return { tickers, venues, base: s.replace(/(USDT|USDC|BTC|ETH|USD)$/, '') || s };
+}
+
+async function addPair(){
+  const parsed = parseInput(addTicker.value);
+  if (!parsed){ addMsg.className = 'add-msg err'; addMsg.textContent = 'впишите тикер'; return; }
+
+  const candidate = {
+    rank: null,
+    name: addName.value.trim() || parsed.base,
+    tickers: parsed.tickers,
+    venues: parsed.venues,
+  };
+
+  addMsg.className = 'add-msg';
+  addMsg.textContent = 'ищу…';
+  const data = await resolve(candidate, RANGES[range]);
+  if (!data){
+    addMsg.className = 'add-msg err';
+    addMsg.textContent = `${parsed.tickers[0]} не найден на ${(parsed.venues || DEFAULT_VENUES).map(v => VENUE_LABEL[v]).join(', ')}`;
+    return;
+  }
+
+  candidate._data = data;
+  assets.push(candidate);
+  persist();
+  render();
+  addMsg.className = 'add-msg ok';
+  addMsg.textContent = `${candidate.name} добавлен · ${VENUE_LABEL[data.venue]}`;
+  addTicker.value = '';
+  addName.value = '';
+  addTicker.focus();
+}
+
+document.getElementById('add-go').addEventListener('click', addPair);
+addTicker.addEventListener('keydown', e => { if (e.key === 'Enter') addPair(); });
+addName.addEventListener('keydown', e => { if (e.key === 'Enter') addPair(); });
+
+document.getElementById('btn-add').addEventListener('click', () => {
+  addbar.hidden = !addbar.hidden;
+  if (!addbar.hidden) addTicker.focus();
+});
+document.getElementById('add-close').addEventListener('click', () => {
+  addbar.hidden = true;
+  addMsg.textContent = '';
+});
+
+/* ============================================================
+   РЕЖИМ ПРАВКИ, ЭКСПОРТ, СБРОС
+   ============================================================ */
+const btnEdit = document.getElementById('btn-edit');
+btnEdit.addEventListener('click', () => {
+  editing = !editing;
+  document.body.classList.toggle('editing', editing);
+  btnEdit.setAttribute('aria-pressed', String(editing));
+  btnEdit.textContent = editing ? 'готово' : 'изменить';
+  render();
+});
+
+document.getElementById('btn-export').addEventListener('click', async e => {
+  e.preventDefault();
+  const json = JSON.stringify(assets.map(a => ({ rank:a.rank, name:a.name, tickers:a.tickers, venues:a.venues })), null, 1);
+  try{ await navigator.clipboard.writeText(json); status.textContent = 'список скопирован'; }
+  catch(err){ window.prompt('Скопируйте список:', json); }
+});
+
+document.getElementById('btn-import').addEventListener('click', e => {
+  e.preventDefault();
+  const raw = window.prompt('Вставьте ранее скопированный список:');
+  if (!raw) return;
+  try{
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) throw new Error();
+    assets = arr.filter(a => a && Array.isArray(a.tickers) && a.tickers.length)
+                .map(a => ({ rank:a.rank ?? null, name:a.name || a.tickers[0], tickers:a.tickers, venues:a.venues || null }));
+    persist(); render(); refresh();
+  }catch(err){ status.textContent = 'список не разобран'; }
+});
+
+document.getElementById('btn-reset').addEventListener('click', e => {
+  e.preventDefault();
+  if (!window.confirm('Вернуть список по умолчанию?')) return;
+  assets = DEFAULTS.map(a => ({ ...a, tickers:[...a.tickers] }));
+  persist(); render(); refresh();
+});
+
+for (const btn of document.querySelectorAll('.range button')){
+  btn.addEventListener('click', () => {
+    range = btn.dataset.range;
+    for (const b of document.querySelectorAll('.range button')) b.setAttribute('aria-pressed', String(b === btn));
+    refresh();
+  });
+}
+
+/* ============================================================
+   СТАРТ
+   ============================================================ */
+const cachedAt = uncacheData();
+render();
+if (cachedAt){
+  const t = new Date(cachedAt).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+  status.textContent = `из памяти · ${t}`;
+}
+refresh();
+
+setInterval(() => { if (!editing && document.visibilityState === 'visible') refresh(); }, 30000);
+
+/* вернулись в приложение — сразу освежаем */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !editing) refresh();
+});
+window.addEventListener('online', () => { if (!editing) refresh(); });
+
+/* оболочка приложения */
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
