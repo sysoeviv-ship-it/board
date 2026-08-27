@@ -233,12 +233,12 @@
 </header>
 
 <div class="addbar" id="addbar" hidden>
-  <input id="add-ticker" placeholder="XMR / KAG / MEXCF:XAG" autocomplete="off" spellcheck="false">
+  <input id="add-ticker" placeholder="XMR / BYBITF:XAG" autocomplete="off" spellcheck="false">
   <input id="add-name" placeholder="Название (необязательно)" autocomplete="off">
   <button class="btn" id="add-go">добавить</button>
   <button class="btn" id="add-close">закрыть</button>
   <span class="add-msg" id="add-msg"></span>
-  <span class="add-hint">Без префикса — перебор: спот Binance, MEXC, Bybit, затем старый спот MEXC и бессрочные контракты. Префиксом можно задать источник: BINANCE:, MEXC:, MEXC2:, MEXCF:, BYBIT:, BYBITF:</span>
+  <span class="add-hint">Без префикса — перебор: спот Binance, спот Bybit, бессрочные Bybit. Префиксом можно задать источник: BINANCE:, BYBIT:, BYBITF:</span>
 </div>
 
 <main class="board" id="board"></main>
@@ -263,32 +263,26 @@ const DEFAULTS = [
   { rank: 22, name:'Litecoin',     tickers:['LTCUSDT'] },
   { rank: 23, name:'Gram',         tickers:['GRAMUSDT','TONUSDT'] },
   { rank: 28, name:'Sui',          tickers:['SUIUSDT'] },
-  { rank: 29, name:'Tether Gold',  tickers:['XAUTUSDT'], venues:['mexc','bybit'] },
+  { rank: 29, name:'Tether Gold',  tickers:['XAUTUSDT'], venues:['bybit'] },
   { rank: 35, name:'NEAR',         tickers:['NEARUSDT'] },
-  { rank: 44, name:'Mantle',       tickers:['MNTUSDT'],  venues:['bybit','mexc'] },
-  { rank: 75, name:'Flare',        tickers:['FLRUSDT'],  venues:['mexc','bybit'] },
-  { rank:547, name:'Kinesis Silver', tickers:['KAGUSDT'], venues:['mexc','mexc2'] },
-  { rank:null, name:'Silver · XAG', tickers:['XAGUSDT'], venues:['mexcf','bybitf'] },
+  { rank: 44, name:'Mantle',       tickers:['MNTUSDT'],  venues:['bybit'] },
+  { rank: 75, name:'Flare',        tickers:['FLRUSDT'],  venues:['bybit'] },
+  { rank:null, name:'Silver · XAG', tickers:['XAGUSDT'], venues:['bybitf'] },
   { rank:575, name:'Cyber',        tickers:['CYBERUSDT'] },
-  { rank:656, name:'Symbol',       tickers:['XYMUSDT'],  venues:['mexc','bybit'] },
   { rank:667, name:'Civic',        tickers:['CVCUSDT'] },
 ];
 
-const DEFAULT_VENUES = ['binance','mexc','bybit','mexc2','mexcf','bybitf'];
-const VENUE_LABEL = {
-  binance:'Binance', mexc:'MEXC', bybit:'Bybit',
-  mexc2:'MEXC', mexcf:'MEXC · Ф', bybitf:'Bybit · Ф',
-};
+const DEFAULT_VENUES = ['binance','bybit','bybitf'];
+const VENUE_LABEL = { binance:'Binance', bybit:'Bybit', bybitf:'Bybit · Ф' };
 const STORE_KEY = 'board.assets.v1';
 
-/* spot — Binance/MEXC v3, bybit — Bybit, v2 — старый MEXC,
-   cf/cfStep/cfLimit — контракты MEXC (шаг в секундах) */
+/* spot — интервал Binance, bybit — интервал Bybit (спот и контракты) */
 const RANGES = {
-  '1D': { spot:'15m', bybit:'15',  v2:'15m', cf:'Min15', cfStep:900,   cfLimit:96,  limit:96  },
-  '1W': { spot:'2h',  bybit:'120', v2:'60m', cf:'Min60', cfStep:3600,  cfLimit:168, limit:84  },
-  '1M': { spot:'4h',  bybit:'240', v2:'4h',  cf:'Hour4', cfStep:14400, cfLimit:180, limit:180 },
-  '3M': { spot:'12h', bybit:'720', v2:'4h',  cf:'Hour8', cfStep:28800, cfLimit:270, limit:180 },
-  '1Y': { spot:'1d',  bybit:'D',   v2:'1d',  cf:'Day1',  cfStep:86400, cfLimit:365, limit:365 },
+  '1D': { spot:'15m', bybit:'15',  limit:96  },
+  '1W': { spot:'2h',  bybit:'120', limit:84  },
+  '1M': { spot:'4h',  bybit:'240', limit:180 },
+  '3M': { spot:'12h', bybit:'720', limit:180 },
+  '1Y': { spot:'1d',  bybit:'D',   limit:365 },
 };
 
 /* ============================================================
@@ -350,75 +344,36 @@ function uncacheData(){
 
    Источники:
      binance — спот Binance
-     mexc    — спот MEXC (только пары, открытые в API v3)
      bybit   — спот Bybit
-     mexc2   — старый спот MEXC, добирает пары вне API v3 (KAG и подобные)
-     mexcf   — бессрочные контракты MEXC (SILVER(XAG), GOLD(XAU) и т. п.)
      bybitf  — бессрочные контракты Bybit
+
+   MEXC убран намеренно: его API отвечает 200, но без заголовка
+   Access-Control-Allow-Origin, поэтому браузер выбрасывает ответ.
+   Пары, живущие только на MEXC (KAG, XYM), из веб-страницы
+   недоступны — нужен серверный посредник.
    ============================================================ */
 const QUOTES = ['USDT','USDC','USD1','FDUSD','USD','BTC','ETH'];
-
-/* KAGUSDT -> KAG_USDT */
-function underscore(ticker){
-  if (ticker.includes('_')) return ticker;
-  for (const q of QUOTES){
-    if (ticker.endsWith(q)) return ticker.slice(0, -q.length) + '_' + q;
-  }
-  return ticker;
-}
 const plainTicker = t => t.replace('_', '');
 
 async function fetchCloses(venue, ticker, r){
-  /* Binance и MEXC v3 — один и тот же формат: массив свечей, close в 5-м поле */
-  if (venue === 'binance' || venue === 'mexc'){
-    const host = venue === 'binance' ? 'https://api.binance.com' : 'https://api.mexc.com';
-    const res = await fetch(`${host}/api/v3/klines?symbol=${plainTicker(ticker)}&interval=${r.spot}&limit=${r.limit}`);
+  /* Binance: массив свечей, close — пятое поле */
+  if (venue === 'binance'){
+    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${plainTicker(ticker)}&interval=${r.spot}&limit=${r.limit}`);
     if (!res.ok) throw new Error('http ' + res.status);
     const rows = await res.json();
     if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
     return rows.map(k => parseFloat(k[4]));
   }
 
-  /* Спот Bybit — свечи от новых к старым */
-  if (venue === 'bybit'){
-    const res = await fetch(`https://api.bybit.com/v5/market/kline?category=spot&symbol=${plainTicker(ticker)}&interval=${r.bybit}&limit=${Math.min(r.limit,1000)}`);
+  /* Bybit: то же API для спота и контрактов, различается category.
+     Свечи приходят от новых к старым. */
+  if (venue === 'bybit' || venue === 'bybitf'){
+    const category = venue === 'bybit' ? 'spot' : 'linear';
+    const res = await fetch(`https://api.bybit.com/v5/market/kline?category=${category}&symbol=${plainTicker(ticker)}&interval=${r.bybit}&limit=${Math.min(r.limit,1000)}`);
     if (!res.ok) throw new Error('http ' + res.status);
     const rows = (await res.json())?.result?.list;
     if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
     return rows.map(k => parseFloat(k[4])).reverse();
-  }
-
-  /* Бессрочные Bybit — то же API, другая категория */
-  if (venue === 'bybitf'){
-    const res = await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${plainTicker(ticker)}&interval=${r.bybit}&limit=${Math.min(r.limit,1000)}`);
-    if (!res.ok) throw new Error('http ' + res.status);
-    const rows = (await res.json())?.result?.list;
-    if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
-    return rows.map(k => parseFloat(k[4])).reverse();
-  }
-
-  /* Старый спотовый API MEXC: подчёркивание в тикере, close — третье поле */
-  if (venue === 'mexc2'){
-    const res = await fetch(`https://www.mexc.com/open/api/v2/market/kline?symbol=${underscore(ticker)}&interval=${r.v2}&limit=${Math.min(r.limit,1000)}`);
-    if (!res.ok) throw new Error('http ' + res.status);
-    const rows = (await res.json())?.data;
-    if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
-    const closes = rows.map(k => parseFloat(k[2]));
-    if (closes.some(v => !isFinite(v) || v <= 0)) throw new Error('bad');
-    return closes;
-  }
-
-  /* Контракты MEXC: свой хост, свои интервалы, данные — параллельные массивы */
-  if (venue === 'mexcf'){
-    const start = Math.floor(Date.now() / 1000) - r.cfStep * r.cfLimit;
-    const res = await fetch(`https://contract.mexc.com/api/v1/contract/kline/${underscore(ticker)}?interval=${r.cf}&start=${start}`);
-    if (!res.ok) throw new Error('http ' + res.status);
-    const j = await res.json();
-    const arr = j?.data?.close;
-    if (!Array.isArray(arr) || arr.length < 2) throw new Error('empty');
-    const closes = arr.map(Number);
-    if (closes.some(v => !isFinite(v) || v <= 0)) throw new Error('bad');
-    return closes;
   }
 
   throw new Error('unknown venue');
@@ -621,8 +576,8 @@ function parseInput(raw){
   let s = raw.trim().toUpperCase().replace(/\s+/g, '');
   if (!s) return null;
   let venues = null;
-  // порядок важен: MEXCF и MEXC2 должны проверяться раньше MEXC
-  const m = s.match(/^(BINANCE|MEXCF|MEXC2|MEXC|BYBITF|BYBIT)[:\/](.+)$/);
+  // BYBITF должен проверяться раньше BYBIT
+  const m = s.match(/^(BINANCE|BYBITF|BYBIT)[:\/](.+)$/);
   if (m){ venues = [m[1].toLowerCase()]; s = m[2]; }
   const hasQuote = new RegExp('(' + QUOTES.join('|') + ')$').test(s);
   const tickers = hasQuote ? [s] : [s + 'USDT'];
