@@ -14,6 +14,7 @@
 <meta name="apple-mobile-web-app-title" content="Борд">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@200;300;400;500&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -66,7 +67,7 @@
   /* ---------- Шапка ---------- */
   header{
     display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;
-    padding-bottom:11px;margin-bottom:12px;border-bottom:1px solid var(--rule);
+    padding-bottom:11px;border-bottom:1px solid var(--rule);
   }
   .brand{margin-right:auto}
   .eyebrow{
@@ -98,6 +99,45 @@
   .range button:hover{color:var(--text)}
   .range button[aria-pressed="true"]{background:var(--accent);color:#fff}
 
+  /* ---------- Вкладки списков ---------- */
+  .tabs{
+    display:flex;align-items:stretch;gap:2px;
+    margin:0 0 12px;padding:0;
+    border-bottom:1px solid var(--rule);
+    overflow-x:auto;scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    appearance:none;border:0;background:transparent;color:var(--muted-dim);
+    font-family:'Archivo',sans-serif;font-size:12.5px;font-weight:300;letter-spacing:.01em;
+    padding:9px 13px;cursor:pointer;white-space:nowrap;flex-shrink:0;
+    border-bottom:2px solid transparent;margin-bottom:-1px;
+    transition:color .15s,border-color .15s;
+  }
+  .tab:hover{color:var(--muted)}
+  .tab[aria-selected="true"]{color:var(--text);border-bottom-color:var(--accent)}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tab .n{
+    font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted-dim);
+    margin-left:5px;vertical-align:super;
+  }
+  .tab.drop{background:var(--panel-hi);border-bottom-color:var(--up)}
+  .tab-add{
+    appearance:none;border:0;background:transparent;color:var(--muted-dim);
+    font-family:'IBM Plex Mono',monospace;font-size:13px;
+    padding:9px 12px;cursor:pointer;flex-shrink:0;
+  }
+  .tab-add:hover{color:var(--text)}
+  .tab-tools{display:none;margin-left:auto;align-items:center;gap:2px;flex-shrink:0}
+  body.editing .tab-tools{display:flex}
+  .tab-tools button{
+    appearance:none;border:0;background:transparent;color:var(--muted-dim);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;
+    padding:8px 9px;cursor:pointer;
+  }
+  .tab-tools button:hover{color:var(--text)}
+  .tab-tools button.del:hover{color:var(--down)}
+
   /* ---------- Панель добавления ---------- */
   .addbar{
     display:flex;flex-wrap:wrap;align-items:center;gap:7px;
@@ -112,9 +152,7 @@
   }
   .addbar input:focus{outline:none;border-color:var(--accent)}
   .addbar input::placeholder{color:var(--muted-dim)}
-  .add-msg{
-    font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted-dim);
-  }
+  .add-msg{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted-dim)}
   .add-msg.err{color:var(--down)}
   .add-msg.ok{color:var(--up)}
   .add-hint{
@@ -124,6 +162,11 @@
 
   /* ---------- Сетка ---------- */
   .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tile-min),1fr));gap:var(--gap)}
+
+  .empty{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted-dim);
+    padding:30px 4px;grid-column:1 / -1;
+  }
 
   .tile{
     position:relative;display:block;text-decoration:none;color:inherit;
@@ -137,7 +180,6 @@
   body.editing .tile.dragging{opacity:.35}
   body.editing .tile.over{border-color:var(--accent)}
 
-  /* строка 1: рейтинг · название · биржа / кнопки правки */
   .row-top{display:flex;align-items:center;gap:var(--gap-top);margin-bottom:1px;min-height:calc(14px * var(--s))}
   .rank{
     font-family:'IBM Plex Mono',monospace;font-size:var(--rank-size);font-weight:300;
@@ -166,7 +208,6 @@
   .ctrl button.del:hover{color:var(--down);border-color:var(--down)}
   .ctrl button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
-  /* строка 2: цена · изменение */
   .row-price{display:flex;align-items:baseline;gap:var(--gap-price);min-height:var(--price-h)}
   .price{
     font-family:'IBM Plex Mono',monospace;font-size:var(--price-size);font-weight:400;
@@ -181,7 +222,6 @@
   .down{color:var(--down)}
   .flat{color:var(--muted-dim)}
 
-  /* строка 3: спарклайн во всю ширину плитки */
   .spark{
     display:block;width:calc(100% + var(--pad-x) * 2);height:var(--spark-h);
     margin:calc(2px * var(--s)) 0 0 calc(var(--pad-x) * -1);
@@ -194,6 +234,24 @@
   }
   .msg.warn{color:var(--warn)}
 
+  /* ---------- Меню переноса в другой список ---------- */
+  .menu{
+    position:absolute;z-index:50;min-width:150px;
+    background:var(--panel);border:1px solid var(--rule);border-radius:7px;
+    padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  .menu .head{
+    font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted-dim);padding:5px 8px 6px;
+  }
+  .menu button{
+    display:block;width:100%;text-align:left;appearance:none;border:0;
+    background:transparent;color:var(--muted);cursor:pointer;
+    font-family:'Archivo',sans-serif;font-size:12px;font-weight:300;
+    padding:7px 8px;border-radius:5px;
+  }
+  .menu button:hover{background:var(--panel-hi);color:var(--text)}
+
   /* ---------- Подвал ---------- */
   footer{
     margin-top:16px;padding-top:11px;border-top:1px solid var(--rule);
@@ -202,6 +260,7 @@
     color:var(--muted-dim);line-height:1.7;
   }
   footer code{color:var(--muted);background:var(--panel);padding:1px 5px;border-radius:3px}
+  footer a{color:var(--muted)}
 
   @media (max-width:520px){
     :root{--s:1.15;--tile-min-base:150px}
@@ -232,19 +291,21 @@
   <button class="btn" id="btn-edit" aria-pressed="false">изменить</button>
 </header>
 
+<nav class="tabs" id="tabs" role="tablist" aria-label="Списки"></nav>
+
 <div class="addbar" id="addbar" hidden>
   <input id="add-ticker" placeholder="XMR / BYBITF:XAG" autocomplete="off" spellcheck="false">
   <input id="add-name" placeholder="Название (необязательно)" autocomplete="off">
   <button class="btn" id="add-go">добавить</button>
   <button class="btn" id="add-close">закрыть</button>
   <span class="add-msg" id="add-msg"></span>
-  <span class="add-hint">Без префикса — перебор: спот Binance, спот Bybit, бессрочные Bybit. Префиксом можно задать источник: BINANCE:, BYBIT:, BYBITF:</span>
+  <span class="add-hint">Пара добавится в открытый список. Без префикса — перебор: спот Binance, спот Bybit, бессрочные Bybit. Префиксом можно задать источник: BINANCE:, BYBIT:, BYBITF:</span>
 </div>
 
 <main class="board" id="board"></main>
 
 <footer>
-  <div>Список хранится в браузере. <a href="#" id="btn-export" style="color:var(--muted)">экспорт</a> · <a href="#" id="btn-import" style="color:var(--muted)">импорт</a> · <a href="#" id="btn-reset" style="color:var(--muted)">сброс</a></div>
+  <div>Списки хранятся в браузере. <a href="#" id="btn-export">экспорт</a> · <a href="#" id="btn-import">импорт</a> · <a href="#" id="btn-reset">сброс</a></div>
   <div>Изменение считается за выбранный период, не за сутки.</div>
   <div>Размер плиток — переменная <code>--s</code> в начале <code>&lt;style&gt;</code>.</div>
 </footer>
@@ -274,7 +335,10 @@ const DEFAULTS = [
 
 const DEFAULT_VENUES = ['binance','bybit','bybitf'];
 const VENUE_LABEL = { binance:'Binance', bybit:'Bybit', bybitf:'Bybit · Ф' };
-const STORE_KEY = 'board.assets.v1';
+
+const STORE_KEY = 'board.lists.v1';
+const OLD_KEY   = 'board.assets.v1';   // одиночный список из прежней версии
+const DATA_KEY  = 'board.data.v1';
 
 /* spot — интервал Binance, bybit — интервал Bybit (спот и контракты) */
 const RANGES = {
@@ -287,51 +351,89 @@ const RANGES = {
 
 /* ============================================================
    СОСТОЯНИЕ
+
+   lists — массив списков, у каждого имя и свой набор активов.
+   Активы одного списка живут только в нём; общий у списков
+   лишь кэш котировок, чтобы переключение было мгновенным.
    ============================================================ */
-let assets = restore() || DEFAULTS.map(a => ({ ...a, tickers:[...a.tickers] }));
+let lists = restore();
+let active = 0;
 let range = '1D';
 let editing = false;
 
+const cloneAsset  = a => ({ rank:a.rank ?? null, name:a.name || a.tickers[0],
+                            tickers:[...a.tickers], venues:a.venues || null });
+const freshDefault = () => [{ name:'Все', assets: DEFAULTS.map(cloneAsset) }];
+const assets = () => lists[active].assets;
+
 const board   = document.getElementById('board');
+const tabsEl  = document.getElementById('tabs');
 const status  = document.getElementById('status');
 const counter = document.getElementById('count');
 
+/* ---------- хранение ---------- */
 function persist(){
   try{
-    const plain = assets.map(a => ({ rank:a.rank, name:a.name, tickers:a.tickers, venues:a.venues }));
-    localStorage.setItem(STORE_KEY, JSON.stringify(plain));
-  }catch(e){ /* приватный режим или file:// без доступа к хранилищу */ }
+    const plain = lists.map(l => ({ name:l.name, assets:l.assets.map(cloneAsset) }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ lists:plain, active }));
+  }catch(e){}
 }
+
+function normalizeLists(raw){
+  if (!raw) return null;
+  // новый формат
+  if (raw.lists && Array.isArray(raw.lists)){
+    const ls = raw.lists
+      .filter(l => l && Array.isArray(l.assets))
+      .map(l => ({ name:String(l.name || 'Список'), assets:l.assets.filter(a => a && Array.isArray(a.tickers) && a.tickers.length).map(cloneAsset) }));
+    return ls.length ? ls : null;
+  }
+  // старый формат — просто массив активов
+  if (Array.isArray(raw) && raw.length && raw[0] && raw[0].tickers){
+    return [{ name:'Все', assets: raw.filter(a => a && Array.isArray(a.tickers) && a.tickers.length).map(cloneAsset) }];
+  }
+  return null;
+}
+
 function restore(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr) || !arr.length) return null;
-    return arr.filter(a => a && Array.isArray(a.tickers) && a.tickers.length)
-              .map(a => ({ rank:a.rank ?? null, name:a.name || a.tickers[0], tickers:a.tickers, venues:a.venues || null }));
-  }catch(e){ return null; }
+    if (raw){
+      const parsed = JSON.parse(raw);
+      const ls = normalizeLists(parsed);
+      if (ls){ active = Math.min(Math.max(parsed.active | 0, 0), ls.length - 1); return ls; }
+    }
+    // переносим единственный список из прежней версии
+    const old = localStorage.getItem(OLD_KEY);
+    if (old){
+      const ls = normalizeLists(JSON.parse(old));
+      if (ls) return ls;
+    }
+  }catch(e){}
+  return freshDefault();
 }
 
-/* последний удачный снимок — чтобы приложение открывалось с цифрами, а не с прочерками */
-const DATA_KEY = 'board.data.v1';
+/* последний удачный снимок — чтобы приложение открывалось с цифрами */
 const keyOf = a => a.tickers.join(',');
 
 function cacheData(){
   try{
-    const items = {};
-    for (const a of assets) if (a._data && a._data !== 'none') items[keyOf(a)] = a._data;
+    const raw = localStorage.getItem(DATA_KEY);
+    let items = {};
+    try{ const c = JSON.parse(raw); if (c && c.range === range && c.items) items = c.items; }catch(e){}
+    for (const l of lists) for (const a of l.assets){
+      if (a._data && a._data !== 'none') items[keyOf(a)] = a._data;
+    }
     localStorage.setItem(DATA_KEY, JSON.stringify({ range, ts: Date.now(), items }));
   }catch(e){}
 }
+
 function uncacheData(){
   try{
-    const raw = localStorage.getItem(DATA_KEY);
-    if (!raw) return null;
-    const c = JSON.parse(raw);
+    const c = JSON.parse(localStorage.getItem(DATA_KEY));
     if (!c || c.range !== range || !c.items) return null;
     let hit = 0;
-    for (const a of assets){
+    for (const l of lists) for (const a of l.assets){
       const d = c.items[keyOf(a)];
       if (d && Array.isArray(d.closes)){ a._data = d; a._hit = { venue:d.venue, ticker:d.ticker }; hit++; }
     }
@@ -339,24 +441,21 @@ function uncacheData(){
   }catch(e){ return null; }
 }
 
+function dropCache(){
+  for (const l of lists) for (const a of l.assets){ a._data = null; a._hit = null; }
+}
+
 /* ============================================================
    ДАННЫЕ
 
-   Источники:
-     binance — спот Binance
-     bybit   — спот Bybit
-     bybitf  — бессрочные контракты Bybit
-
+   Источники: спот Binance, спот Bybit, бессрочные контракты Bybit.
    MEXC убран намеренно: его API отвечает 200, но без заголовка
    Access-Control-Allow-Origin, поэтому браузер выбрасывает ответ.
-   Пары, живущие только на MEXC (KAG, XYM), из веб-страницы
-   недоступны — нужен серверный посредник.
    ============================================================ */
 const QUOTES = ['USDT','USDC','USD1','FDUSD','USD','BTC','ETH'];
 const plainTicker = t => t.replace('_', '');
 
 async function fetchCloses(venue, ticker, r){
-  /* Binance: массив свечей, close — пятое поле */
   if (venue === 'binance'){
     const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${plainTicker(ticker)}&interval=${r.spot}&limit=${r.limit}`);
     if (!res.ok) throw new Error('http ' + res.status);
@@ -364,9 +463,6 @@ async function fetchCloses(venue, ticker, r){
     if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
     return rows.map(k => parseFloat(k[4]));
   }
-
-  /* Bybit: то же API для спота и контрактов, различается category.
-     Свечи приходят от новых к старым. */
   if (venue === 'bybit' || venue === 'bybitf'){
     const category = venue === 'bybit' ? 'spot' : 'linear';
     const res = await fetch(`https://api.bybit.com/v5/market/kline?category=${category}&symbol=${plainTicker(ticker)}&interval=${r.bybit}&limit=${Math.min(r.limit,1000)}`);
@@ -375,7 +471,6 @@ async function fetchCloses(venue, ticker, r){
     if (!Array.isArray(rows) || rows.length < 2) throw new Error('empty');
     return rows.map(k => parseFloat(k[4])).reverse();
   }
-
   throw new Error('unknown venue');
 }
 
@@ -430,9 +525,43 @@ function sparkline(closes, dir){
   </svg>`;
 }
 
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 /* ============================================================
    ОТРИСОВКА
    ============================================================ */
+function renderTabs(){
+  tabsEl.innerHTML = '';
+
+  lists.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.className = 'tab';
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(i === active));
+    b.dataset.i = i;
+    b.innerHTML = `${escapeHtml(l.name)}<span class="n">${l.assets.length}</span>`;
+    tabsEl.append(b);
+  });
+
+  const add = document.createElement('button');
+  add.className = 'tab-add';
+  add.type = 'button';
+  add.title = 'Новый список';
+  add.textContent = '+';
+  add.addEventListener('click', addList);
+  tabsEl.append(add);
+
+  const tools = document.createElement('span');
+  tools.className = 'tab-tools';
+  tools.innerHTML = `
+    <button type="button" data-act="rename">переименовать</button>
+    <button type="button" data-act="dellist" class="del">удалить список</button>`;
+  tabsEl.append(tools);
+}
+
 function tileBody(a){
   const d = a._data;
   if (!d) return `<div class="row-price"><span class="price flat">—</span></div>
@@ -453,9 +582,17 @@ function tileBody(a){
 
 function render(){
   board.innerHTML = '';
-  counter.textContent = assets.length;
+  counter.textContent = assets().length;
 
-  assets.forEach((a, i) => {
+  if (!assets().length){
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = 'Список пуст. Добавьте пару кнопкой «+ пара» или перетащите плитку с другой вкладки.';
+    board.append(e);
+    return;
+  }
+
+  assets().forEach((a, i) => {
     const d = a._data;
     const tile = document.createElement('a');
     tile.className = 'tile';
@@ -475,6 +612,7 @@ function render(){
         <span class="ctrl">
           <button type="button" data-act="left"  title="Левее">◀</button>
           <button type="button" data-act="right" title="Правее">▶</button>
+          <button type="button" data-act="move"  title="В другой список">⇄</button>
           <button type="button" data-act="del" class="del" title="Удалить">×</button>
         </span>
       </div>
@@ -484,39 +622,126 @@ function render(){
   });
 }
 
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+function renderAll(){ renderTabs(); render(); }
 
 /* ============================================================
-   ОБНОВЛЕНИЕ
+   ОБНОВЛЕНИЕ — только открытый список
    ============================================================ */
 async function refresh(){
   const r = RANGES[range];
+  const list = assets();
+  if (!list.length){ status.textContent = 'список пуст'; return; }
+
   status.textContent = 'обновление…';
-  const results = await Promise.all(assets.map(a => resolve(a, r).catch(() => null)));
-  results.forEach((d, i) => {
-    // при обрыве связи оставляем прошлые цифры, а не затираем прочерками
-    assets[i]._data = d || assets[i]._data || 'none';
-  });
+  const results = await Promise.all(list.map(a => resolve(a, r).catch(() => null)));
+  results.forEach((d, i) => { list[i]._data = d || list[i]._data || 'none'; });
   render();
 
   const ok = results.filter(Boolean).length;
   const t = new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  status.textContent = ok ? `${ok}/${assets.length} · ${t}` : 'нет связи · данные прошлые';
+  status.textContent = ok ? `${ok}/${list.length} · ${t}` : 'нет связи · данные прошлые';
   if (ok) cacheData();
 }
 
 /* ============================================================
-   РЕДАКТИРОВАНИЕ: порядок и удаление
+   СПИСКИ
+   ============================================================ */
+function switchTo(i){
+  if (i === active || i < 0 || i >= lists.length) return;
+  active = i;
+  persist();
+  renderAll();
+  refresh();
+}
+
+function addList(){
+  const name = window.prompt('Название списка:', 'Список ' + (lists.length + 1));
+  if (!name) return;
+  lists.push({ name: name.trim().slice(0, 40), assets: [] });
+  active = lists.length - 1;
+  persist();
+  renderAll();
+}
+
+function renameList(){
+  const name = window.prompt('Новое название:', lists[active].name);
+  if (!name) return;
+  lists[active].name = name.trim().slice(0, 40);
+  persist();
+  renderTabs();
+}
+
+function deleteList(){
+  if (lists.length === 1){ window.alert('Последний список удалить нельзя.'); return; }
+  const l = lists[active];
+  if (!window.confirm(`Удалить список «${l.name}» и ${l.assets.length} плиток в нём?`)) return;
+  lists.splice(active, 1);
+  active = Math.max(0, active - 1);
+  persist();
+  renderAll();
+  refresh();
+}
+
+function moveToList(assetIdx, targetIdx){
+  if (targetIdx === active) return;
+  const [item] = assets().splice(assetIdx, 1);
+  lists[targetIdx].assets.push(item);
+  persist();
+  renderAll();
+}
+
+tabsEl.addEventListener('click', e => {
+  const tool = e.target.closest('.tab-tools button');
+  if (tool){
+    if (tool.dataset.act === 'rename')  renameList();
+    if (tool.dataset.act === 'dellist') deleteList();
+    return;
+  }
+  const tab = e.target.closest('.tab');
+  if (tab) switchTo(+tab.dataset.i);
+});
+
+/* ============================================================
+   РЕДАКТИРОВАНИЕ ПЛИТОК
    ============================================================ */
 function move(from, to){
-  if (to < 0 || to >= assets.length) return;
-  const [item] = assets.splice(from, 1);
-  assets.splice(to, 0, item);
+  if (to < 0 || to >= assets().length) return;
+  const [item] = assets().splice(from, 1);
+  assets().splice(to, 0, item);
   persist();
   render();
 }
+
+function closeMenu(){
+  const m = document.querySelector('.menu');
+  if (m) m.remove();
+}
+
+function openMoveMenu(btn, assetIdx){
+  closeMenu();
+  const others = lists.map((l, i) => ({ l, i })).filter(x => x.i !== active);
+  if (!others.length){ window.alert('Других списков пока нет — создайте вкладку кнопкой «+».'); return; }
+
+  const m = document.createElement('div');
+  m.className = 'menu';
+  m.innerHTML = '<div class="head">перенести в</div>';
+  others.forEach(({ l, i }) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = l.name;
+    b.addEventListener('click', () => { closeMenu(); moveToList(assetIdx, i); });
+    m.append(b);
+  });
+
+  document.body.append(m);
+  const r = btn.getBoundingClientRect();
+  m.style.left = Math.min(r.left + window.scrollX, window.innerWidth - m.offsetWidth - 10) + 'px';
+  m.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.menu') && !e.target.closest('[data-act="move"]')) closeMenu();
+});
 
 board.addEventListener('click', e => {
   const btn = e.target.closest('.ctrl button');
@@ -526,13 +751,14 @@ board.addEventListener('click', e => {
     const act = btn.dataset.act;
     if (act === 'left')  move(i, i - 1);
     if (act === 'right') move(i, i + 1);
-    if (act === 'del'){ assets.splice(i, 1); persist(); render(); }
+    if (act === 'move')  openMoveMenu(btn, i);
+    if (act === 'del'){ assets().splice(i, 1); persist(); renderAll(); }
     return;
   }
-  if (editing) e.preventDefault(); // в режиме правки плитка не открывает ссылку
+  if (editing) e.preventDefault();
 });
 
-/* перетаскивание */
+/* ---------- перетаскивание: внутри списка и на вкладку ---------- */
 let dragFrom = null;
 
 board.addEventListener('dragstart', e => {
@@ -545,13 +771,14 @@ board.addEventListener('dragstart', e => {
 });
 board.addEventListener('dragend', () => {
   dragFrom = null;
-  for (const t of board.querySelectorAll('.tile')) t.classList.remove('dragging','over');
+  document.querySelectorAll('.tile').forEach(t => t.classList.remove('dragging','over'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('drop'));
 });
 board.addEventListener('dragover', e => {
   if (dragFrom === null) return;
   e.preventDefault();
   const tile = e.target.closest('.tile');
-  for (const t of board.querySelectorAll('.tile')) t.classList.remove('over');
+  document.querySelectorAll('.tile').forEach(t => t.classList.remove('over'));
   if (tile && +tile.dataset.i !== dragFrom) tile.classList.add('over');
 });
 board.addEventListener('drop', e => {
@@ -564,8 +791,29 @@ board.addEventListener('drop', e => {
   dragFrom = null;
 });
 
+tabsEl.addEventListener('dragover', e => {
+  if (dragFrom === null) return;
+  const tab = e.target.closest('.tab');
+  if (!tab || +tab.dataset.i === active) return;
+  e.preventDefault();
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('drop'));
+  tab.classList.add('drop');
+});
+tabsEl.addEventListener('dragleave', e => {
+  const tab = e.target.closest('.tab');
+  if (tab) tab.classList.remove('drop');
+});
+tabsEl.addEventListener('drop', e => {
+  if (dragFrom === null) return;
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  e.preventDefault();
+  moveToList(dragFrom, +tab.dataset.i);
+  dragFrom = null;
+});
+
 /* ============================================================
-   РЕДАКТИРОВАНИЕ: добавление
+   ДОБАВЛЕНИЕ ПАРЫ
    ============================================================ */
 const addbar = document.getElementById('addbar');
 const addTicker = document.getElementById('add-ticker');
@@ -606,11 +854,11 @@ async function addPair(){
   }
 
   candidate._data = data;
-  assets.push(candidate);
+  assets().push(candidate);
   persist();
-  render();
+  renderAll();
   addMsg.className = 'add-msg ok';
-  addMsg.textContent = `${candidate.name} добавлен · ${VENUE_LABEL[data.venue]}`;
+  addMsg.textContent = `${candidate.name} → ${lists[active].name} · ${VENUE_LABEL[data.venue]}`;
   addTicker.value = '';
   addName.value = '';
   addTicker.focus();
@@ -638,40 +886,43 @@ btnEdit.addEventListener('click', () => {
   document.body.classList.toggle('editing', editing);
   btnEdit.setAttribute('aria-pressed', String(editing));
   btnEdit.textContent = editing ? 'готово' : 'изменить';
+  closeMenu();
   render();
 });
 
 document.getElementById('btn-export').addEventListener('click', async e => {
   e.preventDefault();
-  const json = JSON.stringify(assets.map(a => ({ rank:a.rank, name:a.name, tickers:a.tickers, venues:a.venues })), null, 1);
-  try{ await navigator.clipboard.writeText(json); status.textContent = 'список скопирован'; }
-  catch(err){ window.prompt('Скопируйте список:', json); }
+  const json = JSON.stringify({ lists: lists.map(l => ({ name:l.name, assets:l.assets.map(cloneAsset) })) }, null, 1);
+  try{ await navigator.clipboard.writeText(json); status.textContent = 'списки скопированы'; }
+  catch(err){ window.prompt('Скопируйте:', json); }
 });
 
 document.getElementById('btn-import').addEventListener('click', e => {
   e.preventDefault();
-  const raw = window.prompt('Вставьте ранее скопированный список:');
+  const raw = window.prompt('Вставьте ранее скопированные списки:');
   if (!raw) return;
   try{
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr) || !arr.length) throw new Error();
-    assets = arr.filter(a => a && Array.isArray(a.tickers) && a.tickers.length)
-                .map(a => ({ rank:a.rank ?? null, name:a.name || a.tickers[0], tickers:a.tickers, venues:a.venues || null }));
-    persist(); render(); refresh();
-  }catch(err){ status.textContent = 'список не разобран'; }
+    const ls = normalizeLists(JSON.parse(raw));
+    if (!ls) throw new Error();
+    lists = ls; active = 0;
+    persist(); dropCache(); renderAll(); uncacheData(); render(); refresh();
+  }catch(err){ status.textContent = 'не разобрано'; }
 });
 
 document.getElementById('btn-reset').addEventListener('click', e => {
   e.preventDefault();
-  if (!window.confirm('Вернуть список по умолчанию?')) return;
-  assets = DEFAULTS.map(a => ({ ...a, tickers:[...a.tickers] }));
-  persist(); render(); refresh();
+  if (!window.confirm('Удалить все списки и вернуть исходный?')) return;
+  lists = freshDefault(); active = 0;
+  persist(); renderAll(); refresh();
 });
 
 for (const btn of document.querySelectorAll('.range button')){
   btn.addEventListener('click', () => {
     range = btn.dataset.range;
     for (const b of document.querySelectorAll('.range button')) b.setAttribute('aria-pressed', String(b === btn));
+    dropCache();          // кэш привязан к периоду
+    uncacheData();
+    render();
     refresh();
   });
 }
@@ -680,7 +931,7 @@ for (const btn of document.querySelectorAll('.range button')){
    СТАРТ
    ============================================================ */
 const cachedAt = uncacheData();
-render();
+renderAll();
 if (cachedAt){
   const t = new Date(cachedAt).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
   status.textContent = `из памяти · ${t}`;
@@ -689,13 +940,11 @@ refresh();
 
 setInterval(() => { if (!editing && document.visibilityState === 'visible') refresh(); }, 30000);
 
-/* вернулись в приложение — сразу освежаем */
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && !editing) refresh();
 });
 window.addEventListener('online', () => { if (!editing) refresh(); });
 
-/* оболочка приложения */
 if ('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
