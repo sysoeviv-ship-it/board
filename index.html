@@ -356,7 +356,6 @@ const RANGES = {
    Активы одного списка живут только в нём; общий у списков
    лишь кэш котировок, чтобы переключение было мгновенным.
    ============================================================ */
-let lists = restore();
 let active = 0;
 let range = '1D';
 let editing = false;
@@ -365,6 +364,9 @@ const cloneAsset  = a => ({ rank:a.rank ?? null, name:a.name || a.tickers[0],
                             tickers:[...a.tickers], venues:a.venues || null });
 const freshDefault = () => [{ name:'Все', assets: DEFAULTS.map(cloneAsset) }];
 const assets = () => lists[active].assets;
+
+/* объявляется последним: restore() опирается на помощников выше */
+let lists = restore();
 
 const board   = document.getElementById('board');
 const tabsEl  = document.getElementById('tabs');
