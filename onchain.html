@@ -259,7 +259,11 @@ function say(text, isErr){
 async function api(path){
   const res = await fetch(API + path);
   if (res.status === 429) throw new Error('лимит запросов, подождите минуту');
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  if (!res.ok){
+    const e = new Error('HTTP ' + res.status);
+    e.status = res.status;
+    throw e;
+  }
   return res.json();
 }
 
@@ -354,52 +358,59 @@ async function search(query){
   const q = query.trim();
   if (!q) return;
 
-  // прямой адрес: eth:0x… или просто 0x…
+  // eth:0x… — сеть задана явно, идём напрямую
   const direct = q.match(/^(?:([a-z_0-9]+)\s*:\s*)?(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/);
-  if (direct){
-    const net = direct[1] || 'eth';
-    openToken(net, normAddr(direct[2]));
+  if (direct && direct[1]){
+    openToken(direct[1], normAddr(direct[2]));
     return;
   }
+  // адрес без сети ищем по всем сетям — угадывать «eth» нельзя
+  const wantAddr = direct ? normAddr(direct[2]).toLowerCase() : null;
 
   say('ищу…');
   $('results').innerHTML = '';
   let json;
   try{
     json = await api('/search/pools?query=' + encodeURIComponent(q) + '&include=base_token,quote_token,dex&page=1');
-  }catch(err){ say(err.message, true); return; }
+  }catch(err){ fail(err.message); return; }
 
   const inc = {};
   (json.included || []).forEach(x => { inc[x.type + ':' + x.id] = x; });
 
   const byToken = {};
-  (json.data || []).forEach(p => {
-    const net = String(p.id).split('_')[0];
-    const bt = p.relationships?.base_token?.data;
-    if (!bt) return;
-    const t = inc['token:' + bt.id];
-    const addr = String(bt.id).split('_').slice(1).join('_');
+  const add = (ref, net, liq) => {
+    if (!ref) return;
+    const addr = String(ref.id).split('_').slice(1).join('_');
+    if (wantAddr && addr.toLowerCase() !== wantAddr) return;   // по адресу — только он сам
+    const t = inc['token:' + ref.id];
     const key = net + '|' + addr;
-    const liq = Number(p.attributes?.reserve_in_usd) || 0;
     if (!byToken[key]){
-      byToken[key] = {
-        net, address: addr,
-        symbol: t?.attributes?.symbol || '—',
-        name: t?.attributes?.name || '',
-        liq: 0, pools: 0,
-      };
+      byToken[key] = { net, address:addr, symbol:t?.attributes?.symbol || '—',
+                       name:t?.attributes?.name || '', liq:0, pools:0 };
     }
     byToken[key].liq += liq;
     byToken[key].pools++;
+  };
+
+  (json.data || []).forEach(p => {
+    const net = String(p.id).split('_')[0];
+    const liq = Number(p.attributes?.reserve_in_usd) || 0;
+    add(p.relationships?.base_token?.data, net, liq);
+    if (wantAddr) add(p.relationships?.quote_token?.data, net, liq);  // адрес может быть и вторым в паре
   });
 
   const list = Object.values(byToken).sort((a, b) => b.liq - a.liq).slice(0, 12);
   say('');
 
   if (!list.length){
-    $('results').innerHTML = '<div class="wrap"><div class="note">Ничего не найдено. Попробуйте адрес контракта.</div></div>';
+    fail(wantAddr
+      ? 'Этого адреса нет в базе GeckoTerminal ни в одной сети. Проверьте адрес — возможно, у токена нет пулов на DEX.'
+      : 'Ничего не найдено. Попробуйте адрес контракта.');
     return;
   }
+
+  // адрес нашёлся ровно в одной сети — открываем без лишнего клика
+  if (wantAddr && list.length === 1){ openToken(list[0].net, list[0].address); return; }
 
   const rows = list.map(t => `
     <tr class="pick" data-net="${esc(t.net)}" data-addr="${esc(t.address)}">
@@ -422,6 +433,11 @@ async function search(query){
   });
 }
 
+function fail(text){
+  say('');
+  $('results').innerHTML = `<div class="wrap"><div class="note warn">${esc(text)}</div></div>`;
+}
+
 /* ============================================================
    ТОКЕН, ПУЛЫ
    ============================================================ */
@@ -435,7 +451,17 @@ async function openToken(net, address){
       api(`/networks/${net}/tokens/${address}`),
       api(`/networks/${net}/tokens/${address}/pools?include=dex`),
     ]);
-  }catch(err){ say(err.message, true); return; }
+  }catch(err){
+    // не нашёлся в этой сети — поищем по всем остальным
+    if (err.status === 404){
+      say('');
+      $('results').innerHTML = `<div class="wrap"><div class="note">В сети ${esc(net)} такого токена нет — ищу в остальных…</div></div>`;
+      search(address);
+      return;
+    }
+    fail(err.message);
+    return;
+  }
 
   const a = info?.data?.attributes || {};
   token = { net, address, symbol: a.symbol || '—', name: a.name || '' };
