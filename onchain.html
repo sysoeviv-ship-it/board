@@ -208,6 +208,10 @@
 <section id="sec-trades" hidden>
   <h2>Сделки <span class="sub" id="trades-sub"></span></h2>
   <div class="row">
+    <div class="tf" role="group" aria-label="Охват">
+      <button id="sc-pool" aria-pressed="true">этот пул</button>
+      <button id="sc-all" aria-pressed="false">все пулы</button>
+    </div>
     <span class="hint" style="flex-basis:auto">от</span>
     <input id="minvol" type="number" min="0" step="100" value="0" style="width:110px">
     <span class="hint" style="flex-basis:auto">USD</span>
@@ -252,6 +256,7 @@ let pools = [];
 let pool = null;        // выбранный пул
 let tf = 'hour:1';
 let minVol = 0;
+let scope = 'pool';     // 'pool' — один пул, 'all' — все пулы с оборотом
 let auto = true;
 let timer = null;
 let gen = 0;            // поколение выбора: гасит ответы на уже неактуальные клики
@@ -709,46 +714,96 @@ function candles(c){
    Сторону определяем по адресам from/to, а не по полю kind:
    kind считается относительно базового токена пула, и если наш
    токен в паре второй, направление получается перевёрнутым.
-   ============================================================ */
-async function loadTrades(g){
-  if (!pool || !token) return;
-  const mine = g ?? gen;
-  let json;
-  try{
-    json = await api(`/networks/${token.net}/pools/${pool}/trades`
-                   + (minVol > 0 ? `?trade_volume_in_usd_greater_than=${minVol}` : ''));
-  }catch(err){
-    if (mine !== gen) return;
-    $('trades').innerHTML = `<div class="note warn">${esc(err.message)}</div>`;
-    say(err.message, true);
-    return;
-  }
-  if (mine !== gen) return;
 
+   Общая лента собирается опросом нескольких пулов: отдельного
+   эндпоинта «все сделки токена» у API нет. Пулы с нулевым
+   объёмом за сутки пропускаем — там заведомо пусто.
+   ============================================================ */
+function parseTrades(list, poolLabel){
   const me = token.address.toLowerCase();
-  const list = (json.data || []).map(t => {
+  return (list || []).map(t => {
     const a = t.attributes || {};
     const gotMe = String(a.to_token_address).toLowerCase() === me;
     return {
       time: a.block_timestamp,
-      buy: gotMe,                                            // наш токен получен -> покупка
-      qty: gotMe ? a.to_token_amount : a.from_token_amount,
-      px:  gotMe ? a.price_to_in_usd : a.price_from_in_usd,
-      usd: a.volume_in_usd,
-      who: a.tx_from_address,
-      tx:  a.tx_hash,
+      ts:   Date.parse(a.block_timestamp) || 0,
+      buy:  gotMe,                                           // наш токен получен -> покупка
+      qty:  gotMe ? a.to_token_amount : a.from_token_amount,
+      px:   gotMe ? a.price_to_in_usd : a.price_from_in_usd,
+      usd:  a.volume_in_usd,
+      who:  a.tx_from_address,
+      tx:   a.tx_hash,
+      pool: poolLabel,
     };
   });
+}
 
+function tradesPath(poolAddr){
+  return `/networks/${token.net}/pools/${poolAddr}/trades`
+       + (minVol > 0 ? `?trade_volume_in_usd_greater_than=${minVol}` : '');
+}
+
+async function loadTrades(g){
+  if (!pool || !token) return;
+  const mine = g ?? gen;
+
+  // какие пулы опрашивать
+  const cap = apiKey ? 8 : 3;
+  const targets = scope === 'all'
+    ? pools.filter(p => p.vol24 > 0).sort((a, b) => b.vol24 - a.vol24).slice(0, cap)
+    : pools.filter(p => p.address === pool);
+
+  if (!targets.length){
+    $('trades').innerHTML = '<div class="note">Ни в одном пуле нет оборота за сутки.</div>';
+    return;
+  }
+
+  const acc = [];
+  let failed = 0;
+
+  for (let i = 0; i < targets.length; i++){
+    const p = targets[i];
+    if (mine !== gen) return;                                 // выбрали другой пул — бросаем
+
+    if (scope === 'all'){
+      say(`опрашиваю пулы ${i + 1}/${targets.length}…`);
+    }
+
+    try{
+      const json = await api(tradesPath(p.address));
+      if (mine !== gen) return;
+      acc.push(...parseTrades(json.data, `${p.dex} · ${p.name}`));
+    }catch(err){
+      if (mine !== gen) return;
+      failed++;
+      if (!acc.length && i === targets.length - 1){
+        $('trades').innerHTML = `<div class="note warn">${esc(err.message)}</div>`;
+        say(err.message, true);
+        return;
+      }
+    }
+
+    acc.sort((a, b) => b.ts - a.ts);
+    drawTrades(acc.slice(0, 300), targets.length, failed);    // показываем по мере поступления
+  }
+
+  const t = new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  say(`${acc.length} сделок · ${t}` + (failed ? ` · ${failed} пул(ов) не ответили` : ''));
+}
+
+function drawTrades(list, poolCount, failed){
   if (!list.length){
     $('trades').innerHTML = '<div class="note">Сделок нет — попробуйте убрать фильтр по сумме.</div>';
     return;
   }
 
   const base = EXPLORER[token.net];
+  const showPool = scope === 'all';
+
   const rows = list.map(t => `
     <tr>
       <td class="dim">${esc(ago(t.time))}</td>
+      ${showPool ? `<td class="dim">${esc(t.pool)}</td>` : ''}
       <td class="${t.buy ? 'up' : 'down'}">${t.buy ? 'покупка' : 'продажа'}</td>
       <td class="num">${amount(t.qty)}</td>
       <td class="num dim">${esc(token.symbol)}</td>
@@ -758,13 +813,13 @@ async function loadTrades(g){
     </tr>`).join('');
 
   $('trades').innerHTML = `<table>
-    <thead><tr><th>Когда</th><th>Тип</th>
+    <thead><tr><th>Когда</th>
+      ${showPool ? '<th>Пул</th>' : ''}
+      <th>Тип</th>
       <th style="text-align:right">Объём</th><th></th>
       <th style="text-align:right">USD</th>
       <th style="text-align:right">Цена</th><th>Кошелёк</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
-
-  say('обновлено ' + new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' }));
 }
 
 /* ============================================================
@@ -773,11 +828,26 @@ async function loadTrades(g){
 function restartTimer(){
   clearInterval(timer);
   if (!auto) return;
+  // в общем режиме один цикл — это несколько запросов, поэтому реже
+  const every = scope === 'all' ? (apiKey ? 60000 : 180000) : (apiKey ? 30000 : 60000);
   timer = setInterval(() => {
     if (document.visibilityState === 'visible' && pool) loadTrades();
-  }, apiKey ? 30000 : 60000);
+  }, every);
 }
 
+function setScope(s){
+  if (scope === s) return;
+  scope = s;
+  $('sc-pool').setAttribute('aria-pressed', String(s === 'pool'));
+  $('sc-all').setAttribute('aria-pressed', String(s === 'all'));
+  gen++;
+  $('trades').innerHTML = '<div class="note">загружаю сделки…</div>';
+  loadTrades(gen);
+  restartTimer();
+}
+
+$('sc-pool').addEventListener('click', () => setScope('pool'));
+$('sc-all').addEventListener('click', () => setScope('all'));
 $('btn-key').addEventListener('click', setKey);
 
 $('go').addEventListener('click', () => search($('q').value));
