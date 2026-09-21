@@ -2,7 +2,7 @@
    Кэшируем только статику. Котировки всегда идут в сеть —
    устаревшая цена хуже, чем её отсутствие. */
 
-const VERSION = 'board-v9';
+const VERSION = 'board-v10';
 const SHELL   = VERSION + '-shell';
 const FONTS   = VERSION + '-fonts';
 

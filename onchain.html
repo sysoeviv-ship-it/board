@@ -139,8 +139,19 @@
     font-family:'IBM Plex Mono',monospace;font-size:10px;padding:5px 9px;border-radius:14px;cursor:pointer;
   }
   .chip:hover{color:var(--text);border-color:#2A3A5E}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip.on .dim{color:rgba(255,255,255,.7)}
   .chip .x{color:var(--muted-dim);margin-left:6px}
   .chip .x:hover{color:var(--down)}
+  .chip.on .x{color:rgba(255,255,255,.6)}
+
+  .copy{
+    appearance:none;border:1px solid var(--rule);background:var(--ink);color:var(--muted-dim);
+    font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.06em;
+    padding:2px 6px;border-radius:4px;cursor:pointer;margin-left:6px;vertical-align:middle;
+  }
+  .copy:hover{color:var(--text);border-color:#2A3A5E}
+  .copy.done{color:var(--up);border-color:var(--up)}
 
   footer{
     margin-top:20px;padding-top:11px;border-top:1px solid var(--rule);
@@ -402,9 +413,12 @@ function recents(){
 }
 function remember(t){
   try{
-    const list = recents().filter(x => !(x.net === t.net && x.address === t.address));
-    list.unshift({ net:t.net, address:t.address, symbol:t.symbol, name:t.name });
-    localStorage.setItem(STORE, JSON.stringify(list.slice(0, 12)));
+    const list = recents();
+    // порядок добавления не меняем: повторное открытие не должно тасовать список
+    if (!list.some(x => x.net === t.net && x.address === t.address)){
+      list.push({ net:t.net, address:t.address, symbol:t.symbol, name:t.name });
+      localStorage.setItem(STORE, JSON.stringify(list.slice(0, 20)));
+    }
   }catch(e){}
   drawChips();
 }
@@ -418,8 +432,9 @@ function drawChips(){
   const box = $('chips');
   box.innerHTML = '';
   recents().forEach(t => {
+    const on = token && token.net === t.net && token.address === t.address;
     const b = document.createElement('button');
-    b.className = 'chip';
+    b.className = 'chip' + (on ? ' on' : '');
     b.innerHTML = `${esc(t.symbol)} <span class="dim">${esc(t.net)}</span><span class="x" title="убрать">×</span>`;
     b.addEventListener('click', e => {
       if (e.target.classList.contains('x')){ e.stopPropagation(); forget(t.net, t.address); return; }
@@ -554,10 +569,20 @@ async function openToken(net, address){
     <span class="full">${esc(token.name)}</span>
     <span class="px">${price(a.price_usd)}<span class="full"> USD</span></span>
     <span class="meta">
-      сеть ${esc(net)} · ${esc(shortAddr(address))}<br>
+      сеть ${esc(net)} · ${esc(shortAddr(address))}<button class="copy" id="copy-addr">копировать</button><br>
       объём 24ч ${money(a.volume_usd?.h24)} · FDV ${money(a.fdv_usd)}
     </span>`;
   $('sec-token').hidden = false;
+  drawChips();                                  // подсветить открытый токен
+
+  $('copy-addr').addEventListener('click', async () => {
+    const b = $('copy-addr');
+    try{ await navigator.clipboard.writeText(address); }
+    catch(e){ window.prompt('Адрес:', address); return; }
+    b.textContent = 'скопировано';
+    b.classList.add('done');
+    setTimeout(() => { b.textContent = 'копировать'; b.classList.remove('done'); }, 1500);
+  });
 
   const inc = {};
   (poolsJson.included || []).forEach(x => { inc[x.type + ':' + x.id] = x; });
@@ -576,11 +601,12 @@ async function openToken(net, address){
       chg24: at.price_change_percentage?.h24,
       price: at.base_token_price_usd,
     };
-  }).sort((x, y) => y.liq - x.liq);
+  // по обороту: пул с большой ликвидностью, но без сделок, смотреть незачем
+  }).sort((x, y) => y.vol24 - x.vol24 || y.liq - x.liq);
 
   drawPools();
   $('sec-pools').hidden = false;
-  $('pools-sub').textContent = pools.length ? `— ${pools.length}, по убыванию ликвидности` : '';
+  $('pools-sub').textContent = pools.length ? `— ${pools.length}, по убыванию оборота за сутки` : '';
 
   if (pools.length) selectPool(pools[0].address);
   else {
@@ -596,16 +622,16 @@ function drawPools(){
     <tr class="pick ${pool === p.address ? 'sel' : ''}" data-pool="${esc(p.address)}">
       <td class="name">${esc(p.dex)}</td>
       <td>${esc(p.name)}</td>
-      <td class="num">${money(p.liq)}</td>
       <td class="num">${money(p.vol24)}</td>
+      <td class="num">${money(p.liq)}</td>
       <td class="num ${Number(p.chg24) >= 0 ? 'up' : 'down'}">${pct(p.chg24)}</td>
       <td class="num dim">${p.buys != null ? p.buys + ' / ' + p.sells : '—'}</td>
     </tr>`).join('');
 
   $('pools').innerHTML = `<table>
     <thead><tr><th>Площадка</th><th>Пара</th>
-      <th style="text-align:right">Ликвидность</th>
       <th style="text-align:right">Объём 24ч</th>
+      <th style="text-align:right">Ликвидность</th>
       <th style="text-align:right">Δ 24ч</th>
       <th style="text-align:right">Покупки / продажи</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
