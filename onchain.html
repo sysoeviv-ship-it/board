@@ -177,7 +177,7 @@
   <div class="status" id="status"></div>
   <a class="btn" href="./" style="text-decoration:none">← борд</a>
   <button class="btn" id="btn-key">ключ</button>
-  <button class="btn" id="btn-auto" aria-pressed="true">автообновление</button>
+  <button class="btn" id="btn-auto" aria-pressed="false">автообновление</button>
 </header>
 
 <section id="sec-search">
@@ -250,6 +250,7 @@ const API_FREE = 'https://api.geckoterminal.com/api/v2';
 const API_KEYED = 'https://api.coingecko.com/api/v3/onchain';
 const STORE = 'onchain.recent.v1';
 const KEY_STORE = 'onchain.cgkey.v1';
+const AUTO_STORE = 'onchain.auto.v1';
 
 let apiKey = '';
 try{ apiKey = localStorage.getItem(KEY_STORE) || ''; }catch(e){}
@@ -268,7 +269,8 @@ let pool = null;        // выбранный пул
 let tf = 'hour:1';
 let minVol = 0;
 let scope = 'pool';     // 'pool' — один пул, 'all' — все пулы с оборотом
-let auto = true;
+let auto = false;       // по умолчанию выключено: лента обновляется кнопкой
+try{ auto = localStorage.getItem(AUTO_STORE) === '1'; }catch(e){}
 let timer = null;
 let gen = 0;            // поколение выбора: гасит ответы на уже неактуальные клики
 
@@ -884,9 +886,18 @@ $('apply-min').addEventListener('click', () => {
   loadTrades();
 });
 
+function drawAutoState(){
+  const b = $('btn-auto');
+  b.setAttribute('aria-pressed', String(auto));
+  b.title = auto
+    ? 'Лента перезапрашивается периодически, пока вкладка открыта.'
+    : 'Лента обновляется только кнопкой «обновить» — так расходуется меньше запросов.';
+}
+
 $('btn-auto').addEventListener('click', () => {
   auto = !auto;
-  $('btn-auto').setAttribute('aria-pressed', String(auto));
+  try{ localStorage.setItem(AUTO_STORE, auto ? '1' : '0'); }catch(e){}
+  drawAutoState();
   restartTimer();
 });
 
@@ -904,6 +915,7 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------- старт: ?net=eth&token=0x… или ?q=XAUt ---------- */
 drawKeyState();
+drawAutoState();
 drawChips();
 const params = new URLSearchParams(location.search);
 if (params.get('token')){
