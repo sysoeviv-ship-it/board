@@ -528,6 +528,15 @@ function sparkline(closes, dir){
   </svg>`;
 }
 
+/* Ссылка на график TradingView.
+   Контракты Bybit там называются BYBIT:XAGUSDT.P, а не BYBITF:… —
+   bybitf это моё внутреннее имя источника, биржи с таким именем нет. */
+function tvLink(venue, ticker){
+  const sym = plainTicker(ticker);
+  if (venue === 'bybitf') return `https://www.tradingview.com/chart/?symbol=BYBIT:${sym}.P`;
+  return `https://www.tradingview.com/chart/?symbol=${venue.toUpperCase()}:${sym}`;
+}
+
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -602,7 +611,7 @@ function render(){
     tile.dataset.i = i;
     tile.draggable = editing;
     if (d && d !== 'none' && !editing){
-      tile.href = `https://www.tradingview.com/chart/?symbol=${d.venue.toUpperCase()}:${d.ticker}`;
+      tile.href = tvLink(d.venue, d.ticker);
       tile.target = '_blank';
       tile.rel = 'noopener';
     }
