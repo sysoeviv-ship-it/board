@@ -165,6 +165,7 @@
   </div>
   <div class="status" id="status"></div>
   <a class="btn" href="./" style="text-decoration:none">← борд</a>
+  <button class="btn" id="btn-key">ключ</button>
   <button class="btn" id="btn-auto" aria-pressed="true">автообновление</button>
 </header>
 
@@ -225,12 +226,18 @@
 /* ============================================================
    API
 
-   Публичный GeckoTerminal v2, без ключа. Лимит примерно
-   10–30 запросов в минуту на IP, поэтому обновляем только
-   открытый пул и только пока вкладка видима.
+   Без ключа — публичный GeckoTerminal, примерно 10 запросов
+   в минуту. С бесплатным Demo-ключом CoinGecko те же самые
+   данные доступны по адресу /onchain со лимитом 100 в минуту.
+   Ключ хранится в браузере и в репозиторий не попадает.
    ============================================================ */
-const API = 'https://api.geckoterminal.com/api/v2';
+const API_FREE = 'https://api.geckoterminal.com/api/v2';
+const API_KEYED = 'https://api.coingecko.com/api/v3/onchain';
 const STORE = 'onchain.recent.v1';
+const KEY_STORE = 'onchain.cgkey.v1';
+
+let apiKey = '';
+try{ apiKey = localStorage.getItem(KEY_STORE) || ''; }catch(e){}
 
 const EXPLORER = {
   eth:'https://etherscan.io/tx/', bsc:'https://bscscan.com/tx/',
@@ -247,6 +254,7 @@ let tf = 'hour:1';
 let minVol = 0;
 let auto = true;
 let timer = null;
+let gen = 0;            // поколение выбора: гасит ответы на уже неактуальные клики
 
 const $ = id => document.getElementById(id);
 const status = $('status');
@@ -256,15 +264,84 @@ function say(text, isErr){
   status.className = 'status' + (isErr ? ' err' : '');
 }
 
-async function api(path){
-  const res = await fetch(API + path);
-  if (res.status === 429) throw new Error('лимит запросов, подождите минуту');
+/* ---------- ограничитель частоты ----------
+   Без ключа у публичного API около 10 запросов в минуту, и при
+   превышении он отвечает 429 без заголовков CORS — браузер
+   показывает это как блокировку, а не как лимит. С ключом
+   лимит 100 в минуту, и пауза между запросами сокращается. */
+let lastAt = 0;
+let gateChain = Promise.resolve();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const minGap = () => apiKey ? 700 : 2500;
+
+function gate(){
+  const p = gateChain.then(async () => {
+    const wait = minGap() - (Date.now() - lastAt);
+    if (wait > 0) await sleep(wait);
+    lastAt = Date.now();
+  });
+  gateChain = p.catch(() => {});
+  return p;
+}
+
+function urlFor(path, keyed){
+  if (!keyed) return API_FREE + path;
+  return API_KEYED + path + (path.includes('?') ? '&' : '?') + 'x_cg_demo_api_key=' + encodeURIComponent(apiKey);
+}
+
+async function api(path, retry, noKey){
+  const keyed = !!apiKey && !noKey;
+  await gate();
+
+  let res;
+  try{
+    res = await fetch(urlFor(path, keyed));
+  }catch(netErr){
+    if (!retry){ await sleep(keyed ? 1500 : 6000); return api(path, true, noKey); }
+    const e = new Error('сервис не отвечает — похоже, превышен лимит запросов');
+    e.status = 429;
+    throw e;
+  }
+
+  if (res.status === 429){
+    if (!retry){ await sleep(keyed ? 3000 : 6000); return api(path, true, noKey); }
+    const e = new Error('лимит запросов исчерпан, подождите минуту');
+    e.status = 429;
+    throw e;
+  }
+
+  // ключ есть, но этот эндпоинт в Demo-план не входит — берём бесплатный
+  if (keyed && (res.status === 401 || res.status === 403 || res.status === 404)){
+    return api(path, retry, true);
+  }
+
   if (!res.ok){
     const e = new Error('HTTP ' + res.status);
     e.status = res.status;
     throw e;
   }
   return res.json();
+}
+
+function setKey(){
+  const cur = apiKey ? apiKey.slice(0, 6) + '…' : '';
+  const v = window.prompt('Demo-ключ CoinGecko (пусто — работать без ключа):', cur.includes('…') ? '' : '');
+  if (v === null) return;
+  apiKey = v.trim();
+  try{
+    if (apiKey) localStorage.setItem(KEY_STORE, apiKey);
+    else localStorage.removeItem(KEY_STORE);
+  }catch(e){}
+  drawKeyState();
+  restartTimer();
+}
+
+function drawKeyState(){
+  const b = $('btn-key');
+  b.textContent = apiKey ? 'ключ ✓' : 'ключ';
+  b.title = apiKey
+    ? 'Запросы идут через CoinGecko, 100 в минуту. Нажмите, чтобы сменить или убрать.'
+    : 'Без ключа около 10 запросов в минуту. Нажмите, чтобы вписать бесплатный Demo-ключ CoinGecko.';
 }
 
 /* ============================================================
@@ -535,15 +612,22 @@ function drawPools(){
 
 function selectPool(addr){
   pool = addr;
+  gen++;                                  // ответы на прошлый пул больше не нужны
   drawPools();
+
   const p = pools.find(x => x.address === addr);
   const label = p ? `— ${p.dex}, ${p.name}` : '';
   $('chart-sub').textContent = label;
   $('trades-sub').textContent = label;
   $('sec-chart').hidden = false;
   $('sec-trades').hidden = false;
-  loadChart();
-  loadTrades();
+
+  // сразу показываем, что клик услышан: запросы идут по очереди и не мгновенно
+  $('chart').innerHTML = '<div class="note">загружаю график…</div>';
+  $('trades').innerHTML = '<div class="note">загружаю сделки…</div>';
+
+  loadChart(gen);
+  loadTrades(gen);
   restartTimer();
 }
 
@@ -553,14 +637,20 @@ function selectPool(addr){
    token=<адрес> заставляет отдавать цену именно нашего токена,
    даже когда в паре он стоит вторым.
    ============================================================ */
-async function loadChart(){
+async function loadChart(g){
   if (!pool || !token) return;
+  const mine = g ?? gen;
   const [unit, agg] = tf.split(':');
   let json;
   try{
     json = await api(`/networks/${token.net}/pools/${pool}/ohlcv/${unit}`
                    + `?aggregate=${agg}&limit=120&currency=usd&token=${token.address}`);
-  }catch(err){ $('chart').innerHTML = `<div class="note warn">${esc(err.message)}</div>`; return; }
+  }catch(err){
+    if (mine !== gen) return;
+    $('chart').innerHTML = `<div class="note warn">${esc(err.message)}</div>`;
+    return;
+  }
+  if (mine !== gen) return;   // пока грузили, выбрали другой пул
 
   const raw = json?.data?.attributes?.ohlcv_list || [];
   if (raw.length < 2){ $('chart').innerHTML = '<div class="note">Свечей нет.</div>'; return; }
@@ -620,13 +710,20 @@ function candles(c){
    kind считается относительно базового токена пула, и если наш
    токен в паре второй, направление получается перевёрнутым.
    ============================================================ */
-async function loadTrades(){
+async function loadTrades(g){
   if (!pool || !token) return;
+  const mine = g ?? gen;
   let json;
   try{
     json = await api(`/networks/${token.net}/pools/${pool}/trades`
                    + (minVol > 0 ? `?trade_volume_in_usd_greater_than=${minVol}` : ''));
-  }catch(err){ $('trades').innerHTML = `<div class="note warn">${esc(err.message)}</div>`; return; }
+  }catch(err){
+    if (mine !== gen) return;
+    $('trades').innerHTML = `<div class="note warn">${esc(err.message)}</div>`;
+    say(err.message, true);
+    return;
+  }
+  if (mine !== gen) return;
 
   const me = token.address.toLowerCase();
   const list = (json.data || []).map(t => {
@@ -678,8 +775,10 @@ function restartTimer(){
   if (!auto) return;
   timer = setInterval(() => {
     if (document.visibilityState === 'visible' && pool) loadTrades();
-  }, 30000);
+  }, apiKey ? 30000 : 60000);
 }
+
+$('btn-key').addEventListener('click', setKey);
 
 $('go').addEventListener('click', () => search($('q').value));
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search($('q').value); });
@@ -708,6 +807,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* ---------- старт: ?net=eth&token=0x… или ?q=XAUt ---------- */
+drawKeyState();
 drawChips();
 const params = new URLSearchParams(location.search);
 if (params.get('token')){
