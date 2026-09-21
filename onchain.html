@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ончейн — пулы и сделки</title>
+
+<meta name="theme-color" content="#0A0F1E">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="./icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@200;300;400;500&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A0F1E; --panel:#111A2F; --panel-hi:#16213B; --rule:#1E2B47;
+    --text:#E6EAF5; --muted:#7C88A6; --muted-dim:#54607C;
+    --accent:#7C6CFF; --up:#35D07F; --down:#FF5C7A; --warn:#D9A64A;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink);color:var(--text);
+    font-family:'Archivo',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+            calc(40px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  }
+
+  a{color:var(--muted)}
+  header{
+    display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;
+    padding-bottom:11px;border-bottom:1px solid var(--rule);margin-bottom:14px;
+  }
+  .brand{margin-right:auto}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--muted-dim);margin-bottom:3px;
+  }
+  h1{margin:0;font-size:22px;font-weight:400;letter-spacing:-.01em;line-height:1}
+  .status{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--muted-dim);align-self:center}
+  .status.err{color:var(--down)}
+
+  .btn{
+    appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;
+    padding:6px 11px;border-radius:6px;cursor:pointer;
+    transition:color .15s,background .15s,border-color .15s;
+  }
+  .btn:hover{color:var(--text);border-color:#2A3A5E}
+  .btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  input{
+    appearance:none;background:var(--panel);border:1px solid var(--rule);border-radius:6px;
+    color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:7px 10px;
+  }
+  input:focus{outline:none;border-color:var(--accent)}
+  input::placeholder{color:var(--muted-dim)}
+
+  section{margin-bottom:18px}
+  h2{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:400;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--muted-dim);
+    margin:0 0 8px;display:flex;align-items:center;gap:10px;
+  }
+  h2 .sub{text-transform:none;letter-spacing:.02em;color:var(--muted-dim);font-size:10px}
+
+  /* ---------- Поиск ---------- */
+  .searchbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:10px}
+  .searchbar input{min-width:260px;flex:1 1 260px}
+  .hint{
+    font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:300;
+    color:var(--muted-dim);flex-basis:100%;line-height:1.6;
+  }
+
+  /* ---------- Таблицы ---------- */
+  .wrap{overflow-x:auto;border:1px solid var(--rule);border-radius:8px;background:var(--panel)}
+  table{border-collapse:collapse;width:100%;min-width:560px}
+  th{
+    font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:400;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted-dim);
+    text-align:left;padding:8px 11px;border-bottom:1px solid var(--rule);white-space:nowrap;
+  }
+  td{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:300;
+    padding:7px 11px;border-bottom:1px solid rgba(30,43,71,.5);white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+  }
+  tr:last-child td{border-bottom:0}
+  tbody tr{cursor:default}
+  tbody tr.pick{cursor:pointer}
+  tbody tr.pick:hover{background:var(--panel-hi)}
+  tr.sel{background:rgba(124,108,255,.12)}
+  tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+  td.num{text-align:right}
+  .dim{color:var(--muted-dim)}
+  .name{font-family:'Archivo',sans-serif;font-size:12.5px;font-weight:300}
+  .up{color:var(--up)}
+  .down{color:var(--down)}
+  .note{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted-dim);
+    padding:16px 12px;
+  }
+  .note.warn{color:var(--warn)}
+
+  /* ---------- Сводка по токену ---------- */
+  .tokenbar{
+    display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;
+    padding:11px 13px;background:var(--panel);border:1px solid var(--rule);border-radius:8px;
+  }
+  .tokenbar .sym{font-size:17px;font-weight:400}
+  .tokenbar .full{font-size:12px;font-weight:200;color:var(--muted)}
+  .tokenbar .px{font-family:'IBM Plex Mono',monospace;font-size:17px;font-variant-numeric:tabular-nums}
+  .tokenbar .meta{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted-dim);
+    margin-left:auto;text-align:right;line-height:1.6;
+  }
+
+  /* ---------- График ---------- */
+  .chartbox{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:10px}
+  .chartbox svg{display:block;width:100%;height:230px}
+  .tf{display:flex;gap:2px;background:var(--panel);padding:3px;border-radius:7px;border:1px solid var(--rule)}
+  .tf button{
+    appearance:none;border:0;background:transparent;color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;
+    padding:5px 10px;border-radius:5px;cursor:pointer;
+  }
+  .tf button:hover{color:var(--text)}
+  .tf button[aria-pressed="true"]{background:var(--accent);color:#fff}
+
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+  .row .grow{margin-left:auto}
+
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+  .chip{
+    appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;padding:5px 9px;border-radius:14px;cursor:pointer;
+  }
+  .chip:hover{color:var(--text);border-color:#2A3A5E}
+  .chip .x{color:var(--muted-dim);margin-left:6px}
+  .chip .x:hover{color:var(--down)}
+
+  footer{
+    margin-top:20px;padding-top:11px;border-top:1px solid var(--rule);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:300;
+    color:var(--muted-dim);line-height:1.7;
+  }
+
+  @media (max-width:520px){
+    body{padding:calc(12px + env(safe-area-inset-top)) 10px calc(30px + env(safe-area-inset-bottom)) 10px}
+    h1{font-size:19px}
+    .searchbar input{min-width:0}
+    .chartbox svg{height:180px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="eyebrow">Ончейн · GeckoTerminal</div>
+    <h1>Пулы и сделки</h1>
+  </div>
+  <div class="status" id="status"></div>
+  <a class="btn" href="./" style="text-decoration:none">← борд</a>
+  <button class="btn" id="btn-auto" aria-pressed="true">автообновление</button>
+</header>
+
+<section id="sec-search">
+  <h2>Токен</h2>
+  <div class="searchbar">
+    <input id="q" placeholder="Символ (XAUt, SLVon) или адрес контракта" autocomplete="off" spellcheck="false">
+    <button class="btn" id="go">найти</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="hint">
+    Поиск по символу возвращает и однофамильцев в других сетях — сверяйте адрес и ликвидность.
+    Адрес контракта можно вставить напрямую: тогда добавьте сеть через двоеточие, например <b>eth:0x6874…</b>
+  </div>
+  <div id="results"></div>
+</section>
+
+<section id="sec-token" hidden>
+  <div class="tokenbar" id="tokenbar"></div>
+</section>
+
+<section id="sec-pools" hidden>
+  <h2>Пулы <span class="sub" id="pools-sub"></span></h2>
+  <div class="wrap" id="pools"></div>
+</section>
+
+<section id="sec-chart" hidden>
+  <h2>График <span class="sub" id="chart-sub"></span></h2>
+  <div class="row">
+    <div class="tf" role="group" aria-label="Таймфрейм">
+      <button data-tf="minute:15" aria-pressed="false">15м</button>
+      <button data-tf="hour:1" aria-pressed="true">1ч</button>
+      <button data-tf="hour:4" aria-pressed="false">4ч</button>
+      <button data-tf="day:1" aria-pressed="false">1д</button>
+    </div>
+  </div>
+  <div class="chartbox" id="chart"></div>
+</section>
+
+<section id="sec-trades" hidden>
+  <h2>Сделки <span class="sub" id="trades-sub"></span></h2>
+  <div class="row">
+    <span class="hint" style="flex-basis:auto">от</span>
+    <input id="minvol" type="number" min="0" step="100" value="0" style="width:110px">
+    <span class="hint" style="flex-basis:auto">USD</span>
+    <button class="btn" id="apply-min">применить</button>
+    <button class="btn grow" id="reload">обновить</button>
+  </div>
+  <div class="wrap" id="trades"></div>
+</section>
+
+<footer>
+  Данные <a href="https://www.geckoterminal.com" target="_blank" rel="noopener">GeckoTerminal</a>.
+  Последние 300 сделок за сутки по выбранному пулу. Запросы идут только пока страница открыта.
+</footer>
+
+<script>
+/* ============================================================
+   API
+
+   Публичный GeckoTerminal v2, без ключа. Лимит примерно
+   10–30 запросов в минуту на IP, поэтому обновляем только
+   открытый пул и только пока вкладка видима.
+   ============================================================ */
+const API = 'https://api.geckoterminal.com/api/v2';
+const STORE = 'onchain.recent.v1';
+
+const EXPLORER = {
+  eth:'https://etherscan.io/tx/', bsc:'https://bscscan.com/tx/',
+  base:'https://basescan.org/tx/', arbitrum:'https://arbiscan.io/tx/',
+  polygon_pos:'https://polygonscan.com/tx/', avax:'https://snowtrace.io/tx/',
+  optimism:'https://optimistic.etherscan.io/tx/', solana:'https://solscan.io/tx/',
+  ton:'https://tonviewer.com/transaction/',
+};
+
+let token = null;       // { net, address, symbol, name }
+let pools = [];
+let pool = null;        // выбранный пул
+let tf = 'hour:1';
+let minVol = 0;
+let auto = true;
+let timer = null;
+
+const $ = id => document.getElementById(id);
+const status = $('status');
+
+function say(text, isErr){
+  status.textContent = text;
+  status.className = 'status' + (isErr ? ' err' : '');
+}
+
+async function api(path){
+  const res = await fetch(API + path);
+  if (res.status === 429) throw new Error('лимит запросов, подождите минуту');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+/* ============================================================
+   ФОРМАТ
+   ============================================================ */
+function money(v){
+  const n = Number(v);
+  if (!isFinite(n)) return '—';
+  if (n >= 1e9) return (n/1e9).toFixed(2).replace('.', ',') + ' млрд';
+  if (n >= 1e6) return (n/1e6).toFixed(2).replace('.', ',') + ' млн';
+  if (n >= 1e3) return Math.round(n).toLocaleString('ru-RU');
+  return n.toLocaleString('ru-RU', { maximumFractionDigits:2 });
+}
+function price(v){
+  const n = Number(v);
+  if (!isFinite(n)) return '—';
+  const d = n >= 100 ? 2 : n >= 1 ? 4 : n >= 0.01 ? 5 : 8;
+  return n.toLocaleString('ru-RU', { minimumFractionDigits:d, maximumFractionDigits:d });
+}
+function amount(v){
+  const n = Number(v);
+  if (!isFinite(n)) return '—';
+  return n.toLocaleString('ru-RU', { maximumFractionDigits: n >= 1000 ? 0 : n >= 1 ? 3 : 6 });
+}
+function pct(v){
+  const n = Number(v);
+  if (!isFinite(n)) return '';
+  return (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(2).replace('.', ',') + '%';
+}
+function shortAddr(a){ return a ? a.slice(0, 6) + '…' + a.slice(-4) : ''; }
+
+/* EVM-адреса регистронезависимы, base58 (Solana, TON) — нет */
+function normAddr(a){
+  const s = String(a).trim();
+  return /^0x[a-fA-F0-9]{40}$/.test(s) ? s.toLowerCase() : s;
+}
+function ago(iso){
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return Math.round(s) + ' с';
+  if (s < 3600) return Math.round(s / 60) + ' мин';
+  if (s < 86400) return Math.round(s / 3600) + ' ч';
+  return Math.round(s / 86400) + ' дн';
+}
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   НЕДАВНИЕ ТОКЕНЫ
+   ============================================================ */
+function recents(){
+  try{ return JSON.parse(localStorage.getItem(STORE)) || []; }catch(e){ return []; }
+}
+function remember(t){
+  try{
+    const list = recents().filter(x => !(x.net === t.net && x.address === t.address));
+    list.unshift({ net:t.net, address:t.address, symbol:t.symbol, name:t.name });
+    localStorage.setItem(STORE, JSON.stringify(list.slice(0, 12)));
+  }catch(e){}
+  drawChips();
+}
+function forget(net, address){
+  try{
+    localStorage.setItem(STORE, JSON.stringify(recents().filter(x => !(x.net === net && x.address === address))));
+  }catch(e){}
+  drawChips();
+}
+function drawChips(){
+  const box = $('chips');
+  box.innerHTML = '';
+  recents().forEach(t => {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.innerHTML = `${esc(t.symbol)} <span class="dim">${esc(t.net)}</span><span class="x" title="убрать">×</span>`;
+    b.addEventListener('click', e => {
+      if (e.target.classList.contains('x')){ e.stopPropagation(); forget(t.net, t.address); return; }
+      openToken(t.net, t.address);
+    });
+    box.append(b);
+  });
+}
+
+/* ============================================================
+   ПОИСК ТОКЕНА
+
+   Ищем по пулам и группируем по базовому токену: так сразу
+   видно сеть и ликвидность, а значит и какой из однофамильцев
+   настоящий.
+   ============================================================ */
+async function search(query){
+  const q = query.trim();
+  if (!q) return;
+
+  // прямой адрес: eth:0x… или просто 0x…
+  const direct = q.match(/^(?:([a-z_0-9]+)\s*:\s*)?(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/);
+  if (direct){
+    const net = direct[1] || 'eth';
+    openToken(net, normAddr(direct[2]));
+    return;
+  }
+
+  say('ищу…');
+  $('results').innerHTML = '';
+  let json;
+  try{
+    json = await api('/search/pools?query=' + encodeURIComponent(q) + '&include=base_token,quote_token,dex&page=1');
+  }catch(err){ say(err.message, true); return; }
+
+  const inc = {};
+  (json.included || []).forEach(x => { inc[x.type + ':' + x.id] = x; });
+
+  const byToken = {};
+  (json.data || []).forEach(p => {
+    const net = String(p.id).split('_')[0];
+    const bt = p.relationships?.base_token?.data;
+    if (!bt) return;
+    const t = inc['token:' + bt.id];
+    const addr = String(bt.id).split('_').slice(1).join('_');
+    const key = net + '|' + addr;
+    const liq = Number(p.attributes?.reserve_in_usd) || 0;
+    if (!byToken[key]){
+      byToken[key] = {
+        net, address: addr,
+        symbol: t?.attributes?.symbol || '—',
+        name: t?.attributes?.name || '',
+        liq: 0, pools: 0,
+      };
+    }
+    byToken[key].liq += liq;
+    byToken[key].pools++;
+  });
+
+  const list = Object.values(byToken).sort((a, b) => b.liq - a.liq).slice(0, 12);
+  say('');
+
+  if (!list.length){
+    $('results').innerHTML = '<div class="wrap"><div class="note">Ничего не найдено. Попробуйте адрес контракта.</div></div>';
+    return;
+  }
+
+  const rows = list.map(t => `
+    <tr class="pick" data-net="${esc(t.net)}" data-addr="${esc(t.address)}">
+      <td class="name">${esc(t.symbol)}</td>
+      <td class="dim">${esc(t.name)}</td>
+      <td class="dim">${esc(t.net)}</td>
+      <td class="num">${money(t.liq)}</td>
+      <td class="num dim">${t.pools}</td>
+      <td class="dim">${esc(shortAddr(t.address))}</td>
+    </tr>`).join('');
+
+  $('results').innerHTML = `<div class="wrap"><table>
+    <thead><tr><th>Токен</th><th>Название</th><th>Сеть</th>
+      <th style="text-align:right">Ликвидность</th>
+      <th style="text-align:right">Пулов</th><th>Адрес</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+
+  $('results').querySelectorAll('tr.pick').forEach(tr => {
+    tr.addEventListener('click', () => openToken(tr.dataset.net, tr.dataset.addr));
+  });
+}
+
+/* ============================================================
+   ТОКЕН, ПУЛЫ
+   ============================================================ */
+async function openToken(net, address){
+  say('загружаю…');
+  $('results').innerHTML = '';
+
+  let info, poolsJson;
+  try{
+    [info, poolsJson] = await Promise.all([
+      api(`/networks/${net}/tokens/${address}`),
+      api(`/networks/${net}/tokens/${address}/pools?include=dex`),
+    ]);
+  }catch(err){ say(err.message, true); return; }
+
+  const a = info?.data?.attributes || {};
+  token = { net, address, symbol: a.symbol || '—', name: a.name || '' };
+  remember(token);
+
+  $('tokenbar').innerHTML = `
+    <span class="sym">${esc(token.symbol)}</span>
+    <span class="full">${esc(token.name)}</span>
+    <span class="px">${price(a.price_usd)}<span class="full"> USD</span></span>
+    <span class="meta">
+      сеть ${esc(net)} · ${esc(shortAddr(address))}<br>
+      объём 24ч ${money(a.volume_usd?.h24)} · FDV ${money(a.fdv_usd)}
+    </span>`;
+  $('sec-token').hidden = false;
+
+  const inc = {};
+  (poolsJson.included || []).forEach(x => { inc[x.type + ':' + x.id] = x; });
+
+  pools = (poolsJson.data || []).map(p => {
+    const at = p.attributes || {};
+    const dexId = p.relationships?.dex?.data?.id;
+    return {
+      address: at.address,
+      name: at.name || '',
+      dex: inc['dex:' + dexId]?.attributes?.name || dexId || '—',
+      liq: Number(at.reserve_in_usd) || 0,
+      vol24: Number(at.volume_usd?.h24) || 0,
+      buys: at.transactions?.h24?.buys ?? null,
+      sells: at.transactions?.h24?.sells ?? null,
+      chg24: at.price_change_percentage?.h24,
+      price: at.base_token_price_usd,
+    };
+  }).sort((x, y) => y.liq - x.liq);
+
+  drawPools();
+  $('sec-pools').hidden = false;
+  $('pools-sub').textContent = pools.length ? `— ${pools.length}, по убыванию ликвидности` : '';
+
+  if (pools.length) selectPool(pools[0].address);
+  else {
+    $('sec-chart').hidden = true;
+    $('sec-trades').hidden = true;
+    $('pools').innerHTML = '<div class="note warn">У токена нет пулов в базе GeckoTerminal.</div>';
+  }
+  say('');
+}
+
+function drawPools(){
+  const rows = pools.map(p => `
+    <tr class="pick ${pool === p.address ? 'sel' : ''}" data-pool="${esc(p.address)}">
+      <td class="name">${esc(p.dex)}</td>
+      <td>${esc(p.name)}</td>
+      <td class="num">${money(p.liq)}</td>
+      <td class="num">${money(p.vol24)}</td>
+      <td class="num ${Number(p.chg24) >= 0 ? 'up' : 'down'}">${pct(p.chg24)}</td>
+      <td class="num dim">${p.buys != null ? p.buys + ' / ' + p.sells : '—'}</td>
+    </tr>`).join('');
+
+  $('pools').innerHTML = `<table>
+    <thead><tr><th>Площадка</th><th>Пара</th>
+      <th style="text-align:right">Ликвидность</th>
+      <th style="text-align:right">Объём 24ч</th>
+      <th style="text-align:right">Δ 24ч</th>
+      <th style="text-align:right">Покупки / продажи</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  $('pools').querySelectorAll('tr.pick').forEach(tr => {
+    tr.addEventListener('click', () => selectPool(tr.dataset.pool));
+  });
+}
+
+function selectPool(addr){
+  pool = addr;
+  drawPools();
+  const p = pools.find(x => x.address === addr);
+  const label = p ? `— ${p.dex}, ${p.name}` : '';
+  $('chart-sub').textContent = label;
+  $('trades-sub').textContent = label;
+  $('sec-chart').hidden = false;
+  $('sec-trades').hidden = false;
+  loadChart();
+  loadTrades();
+  restartTimer();
+}
+
+/* ============================================================
+   ГРАФИК
+
+   token=<адрес> заставляет отдавать цену именно нашего токена,
+   даже когда в паре он стоит вторым.
+   ============================================================ */
+async function loadChart(){
+  if (!pool || !token) return;
+  const [unit, agg] = tf.split(':');
+  let json;
+  try{
+    json = await api(`/networks/${token.net}/pools/${pool}/ohlcv/${unit}`
+                   + `?aggregate=${agg}&limit=120&currency=usd&token=${token.address}`);
+  }catch(err){ $('chart').innerHTML = `<div class="note warn">${esc(err.message)}</div>`; return; }
+
+  const raw = json?.data?.attributes?.ohlcv_list || [];
+  if (raw.length < 2){ $('chart').innerHTML = '<div class="note">Свечей нет.</div>'; return; }
+
+  // приходят от новых к старым
+  const c = raw.slice().reverse().map(r => ({ t:r[0], o:+r[1], h:+r[2], l:+r[3], c:+r[4] }));
+  $('chart').innerHTML = candles(c);
+}
+
+function candles(c){
+  const W = 1000, H = 230, PADR = 62, PADB = 16, PADT = 8;
+  const lo = Math.min(...c.map(x => x.l)), hi = Math.max(...c.map(x => x.h));
+  const span = (hi - lo) || 1;
+  const plotW = W - PADR;
+  const step = plotW / c.length;
+  const bw = Math.max(1, Math.min(step * 0.62, 14));
+  const y = v => PADT + (1 - (v - lo) / span) * (H - PADT - PADB);
+
+  let body = '';
+  c.forEach((x, i) => {
+    const cx = i * step + step / 2;
+    const up = x.c >= x.o;
+    const col = up ? 'var(--up)' : 'var(--down)';
+    const y1 = y(Math.max(x.o, x.c)), y2 = y(Math.min(x.o, x.c));
+    body += `<line x1="${cx.toFixed(1)}" y1="${y(x.h).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${y(x.l).toFixed(1)}" stroke="${col}" stroke-width="1"/>`
+          + `<rect x="${(cx - bw/2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}" fill="${col}"/>`;
+  });
+
+  // ценовая шкала справа
+  let grid = '';
+  for (let k = 0; k <= 4; k++){
+    const v = lo + span * k / 4;
+    const yy = y(v);
+    grid += `<line x1="0" y1="${yy.toFixed(1)}" x2="${plotW}" y2="${yy.toFixed(1)}" stroke="var(--rule)" stroke-width="1" opacity=".55"/>`
+          + `<text x="${plotW + 6}" y="${(yy + 3.5).toFixed(1)}" fill="var(--muted-dim)" font-family="IBM Plex Mono, monospace" font-size="10">${price(v)}</text>`;
+  }
+
+  const last = c[c.length - 1];
+  const lastCol = last.c >= last.o ? 'var(--up)' : 'var(--down)';
+  const ly = y(last.c);
+  grid += `<line x1="0" y1="${ly.toFixed(1)}" x2="${plotW}" y2="${ly.toFixed(1)}" stroke="${lastCol}" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>`;
+
+  const t0 = new Date(c[0].t * 1000).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+  const t1 = new Date(last.t * 1000).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    ${grid}${body}
+    <text x="2" y="${H - 4}" fill="var(--muted-dim)" font-family="IBM Plex Mono, monospace" font-size="10">${t0}</text>
+    <text x="${plotW - 2}" y="${H - 4}" text-anchor="end" fill="var(--muted-dim)" font-family="IBM Plex Mono, monospace" font-size="10">${t1}</text>
+  </svg>`;
+}
+
+/* ============================================================
+   СДЕЛКИ
+
+   Сторону определяем по адресам from/to, а не по полю kind:
+   kind считается относительно базового токена пула, и если наш
+   токен в паре второй, направление получается перевёрнутым.
+   ============================================================ */
+async function loadTrades(){
+  if (!pool || !token) return;
+  let json;
+  try{
+    json = await api(`/networks/${token.net}/pools/${pool}/trades`
+                   + (minVol > 0 ? `?trade_volume_in_usd_greater_than=${minVol}` : ''));
+  }catch(err){ $('trades').innerHTML = `<div class="note warn">${esc(err.message)}</div>`; return; }
+
+  const me = token.address.toLowerCase();
+  const list = (json.data || []).map(t => {
+    const a = t.attributes || {};
+    const gotMe = String(a.to_token_address).toLowerCase() === me;
+    return {
+      time: a.block_timestamp,
+      buy: gotMe,                                            // наш токен получен -> покупка
+      qty: gotMe ? a.to_token_amount : a.from_token_amount,
+      px:  gotMe ? a.price_to_in_usd : a.price_from_in_usd,
+      usd: a.volume_in_usd,
+      who: a.tx_from_address,
+      tx:  a.tx_hash,
+    };
+  });
+
+  if (!list.length){
+    $('trades').innerHTML = '<div class="note">Сделок нет — попробуйте убрать фильтр по сумме.</div>';
+    return;
+  }
+
+  const base = EXPLORER[token.net];
+  const rows = list.map(t => `
+    <tr>
+      <td class="dim">${esc(ago(t.time))}</td>
+      <td class="${t.buy ? 'up' : 'down'}">${t.buy ? 'покупка' : 'продажа'}</td>
+      <td class="num">${amount(t.qty)}</td>
+      <td class="num dim">${esc(token.symbol)}</td>
+      <td class="num">${money(t.usd)}</td>
+      <td class="num dim">${price(t.px)}</td>
+      <td class="dim">${base ? `<a href="${base}${esc(t.tx)}" target="_blank" rel="noopener">${esc(shortAddr(t.who))}</a>` : esc(shortAddr(t.who))}</td>
+    </tr>`).join('');
+
+  $('trades').innerHTML = `<table>
+    <thead><tr><th>Когда</th><th>Тип</th>
+      <th style="text-align:right">Объём</th><th></th>
+      <th style="text-align:right">USD</th>
+      <th style="text-align:right">Цена</th><th>Кошелёк</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  say('обновлено ' + new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' }));
+}
+
+/* ============================================================
+   УПРАВЛЕНИЕ
+   ============================================================ */
+function restartTimer(){
+  clearInterval(timer);
+  if (!auto) return;
+  timer = setInterval(() => {
+    if (document.visibilityState === 'visible' && pool) loadTrades();
+  }, 30000);
+}
+
+$('go').addEventListener('click', () => search($('q').value));
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') search($('q').value); });
+$('reload').addEventListener('click', () => { loadTrades(); loadChart(); });
+$('apply-min').addEventListener('click', () => {
+  minVol = Math.max(0, Number($('minvol').value) || 0);
+  loadTrades();
+});
+
+$('btn-auto').addEventListener('click', () => {
+  auto = !auto;
+  $('btn-auto').setAttribute('aria-pressed', String(auto));
+  restartTimer();
+});
+
+document.querySelectorAll('.tf button').forEach(b => {
+  b.addEventListener('click', () => {
+    tf = b.dataset.tf;
+    document.querySelectorAll('.tf button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    loadChart();
+  });
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && pool) loadTrades();
+});
+
+/* ---------- старт: ?net=eth&token=0x… или ?q=XAUt ---------- */
+drawChips();
+const params = new URLSearchParams(location.search);
+if (params.get('token')){
+  openToken(params.get('net') || 'eth', normAddr(params.get('token')));
+} else if (params.get('q')){
+  $('q').value = params.get('q');
+  search(params.get('q'));
+} else {
+  const r = recents();
+  if (r.length) openToken(r[0].net, r[0].address);
+}
+</script>
+</body>
+</html>

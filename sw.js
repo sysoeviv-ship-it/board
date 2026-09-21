@@ -2,13 +2,14 @@
    Кэшируем только статику. Котировки всегда идут в сеть —
    устаревшая цена хуже, чем её отсутствие. */
 
-const VERSION = 'board-v4';
+const VERSION = 'board-v5';
 const SHELL   = VERSION + '-shell';
 const FONTS   = VERSION + '-fonts';
 
 const SHELL_FILES = [
   './',
   './index.html',
+  './onchain.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
